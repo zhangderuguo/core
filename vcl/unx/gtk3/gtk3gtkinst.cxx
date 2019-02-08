@@ -4717,6 +4717,7 @@ private:
     gulong m_nInsertTextSignalId;
     gulong m_nCursorPosSignalId;
     gulong m_nSelectionPosSignalId;
+    gulong m_nActivateSignalId;
 
     static void signalChanged(GtkEntry*, gpointer widget)
     {
@@ -4755,6 +4756,22 @@ private:
         pThis->signal_cursor_position();
     }
 
+    static void signalActivate(GtkEntry*, gpointer widget)
+    {
+        GtkInstanceEntry* pThis = static_cast<GtkInstanceEntry*>(widget);
+        pThis->signal_activate();
+    }
+
+    void signal_activate()
+    {
+        if (m_aActivateHdl.IsSet())
+        {
+            SolarMutexGuard aGuard;
+            if (m_aActivateHdl.Call(*this))
+                g_signal_stop_emission_by_name(m_pEntry, "activate");
+        }
+    }
+
 public:
     GtkInstanceEntry(GtkEntry* pEntry, GtkInstanceBuilder* pBuilder, bool bTakeOwnership)
         : GtkInstanceWidget(GTK_WIDGET(pEntry), pBuilder, bTakeOwnership)
@@ -4763,6 +4780,7 @@ public:
         , m_nInsertTextSignalId(g_signal_connect(pEntry, "insert-text", G_CALLBACK(signalInsertText), this))
         , m_nCursorPosSignalId(g_signal_connect(pEntry, "notify::cursor-position", G_CALLBACK(signalCursorPosition), this))
         , m_nSelectionPosSignalId(g_signal_connect(pEntry, "notify::selection-bound", G_CALLBACK(signalCursorPosition), this))
+        , m_nActivateSignalId(g_signal_connect(pEntry, "activate", G_CALLBACK(signalActivate), this))
     {
     }
 
@@ -4844,6 +4862,7 @@ public:
 
     virtual void disable_notify_events() override
     {
+        g_signal_handler_block(m_pEntry, m_nActivateSignalId);
         g_signal_handler_block(m_pEntry, m_nSelectionPosSignalId);
         g_signal_handler_block(m_pEntry, m_nCursorPosSignalId);
         g_signal_handler_block(m_pEntry, m_nInsertTextSignalId);
@@ -4858,6 +4877,7 @@ public:
         g_signal_handler_unblock(m_pEntry, m_nInsertTextSignalId);
         g_signal_handler_unblock(m_pEntry, m_nCursorPosSignalId);
         g_signal_handler_unblock(m_pEntry, m_nSelectionPosSignalId);
+        g_signal_handler_unblock(m_pEntry, m_nActivateSignalId);
     }
 
     virtual vcl::Font get_font() override
@@ -4949,6 +4969,7 @@ public:
 
     virtual ~GtkInstanceEntry() override
     {
+        g_signal_handler_disconnect(m_pEntry, m_nActivateSignalId);
         g_signal_handler_disconnect(m_pEntry, m_nSelectionPosSignalId);
         g_signal_handler_disconnect(m_pEntry, m_nCursorPosSignalId);
         g_signal_handler_disconnect(m_pEntry, m_nInsertTextSignalId);
