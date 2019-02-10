@@ -1432,6 +1432,13 @@ public:
         return Size(nWidth, nHeight);
     }
 
+    virtual vcl::Font get_font() override
+    {
+        PangoContext* pContext = gtk_widget_get_pango_context(m_pWidget);
+        return pango_to_vcl(pango_context_get_font_description(pContext),
+                            Application::GetSettings().GetUILanguageTag().getLocale());
+    }
+
     virtual void set_grid_left_attach(int nAttach) override
     {
         GtkContainer* pParent = GTK_CONTAINER(gtk_widget_get_parent(m_pWidget));
@@ -4593,6 +4600,66 @@ public:
     }
 };
 
+class GtkInstanceLinkButton : public GtkInstanceContainer, public virtual weld::LinkButton
+{
+private:
+    GtkLinkButton* m_pButton;
+    gulong m_nSignalId;
+
+    static void signalClicked(GtkButton*, gpointer widget)
+    {
+        GtkInstanceLinkButton* pThis = static_cast<GtkInstanceLinkButton*>(widget);
+        SolarMutexGuard aGuard;
+        pThis->signal_clicked();
+    }
+
+public:
+    GtkInstanceLinkButton(GtkLinkButton* pButton, GtkInstanceBuilder* pBuilder, bool bTakeOwnership)
+        : GtkInstanceContainer(GTK_CONTAINER(pButton), pBuilder, bTakeOwnership)
+        , m_pButton(pButton)
+        , m_nSignalId(g_signal_connect(pButton, "clicked", G_CALLBACK(signalClicked), this))
+    {
+    }
+
+    virtual void set_label(const OUString& rText) override
+    {
+        ::set_label(GTK_BUTTON(m_pButton), rText);
+    }
+
+    virtual OUString get_label() const override
+    {
+        return ::get_label(GTK_BUTTON(m_pButton));
+    }
+
+    virtual void set_uri(const OUString& rText) override
+    {
+        gtk_link_button_set_uri(m_pButton, OUStringToOString(rText, RTL_TEXTENCODING_UTF8).getStr());
+    }
+
+    virtual OUString get_uri() const override
+    {
+        const gchar* pStr = gtk_link_button_get_uri(m_pButton);
+        return OUString(pStr, pStr ? strlen(pStr) : 0, RTL_TEXTENCODING_UTF8);
+    }
+
+    virtual void disable_notify_events() override
+    {
+        g_signal_handler_block(m_pButton, m_nSignalId);
+        GtkInstanceContainer::disable_notify_events();
+    }
+
+    virtual void enable_notify_events() override
+    {
+        GtkInstanceContainer::enable_notify_events();
+        g_signal_handler_unblock(m_pButton, m_nSignalId);
+    }
+
+    virtual ~GtkInstanceLinkButton() override
+    {
+        g_signal_handler_disconnect(m_pButton, m_nSignalId);
+    }
+};
+
 class GtkInstanceRadioButton : public GtkInstanceToggleButton, public virtual weld::RadioButton
 {
 public:
@@ -4878,13 +4945,6 @@ public:
         g_signal_handler_unblock(m_pEntry, m_nCursorPosSignalId);
         g_signal_handler_unblock(m_pEntry, m_nSelectionPosSignalId);
         g_signal_handler_unblock(m_pEntry, m_nActivateSignalId);
-    }
-
-    virtual vcl::Font get_font() override
-    {
-        PangoContext* pContext = gtk_widget_get_pango_context(m_pWidget);
-        return pango_to_vcl(pango_context_get_font_description(pContext),
-                            Application::GetSettings().GetUILanguageTag().getLocale());
     }
 
     virtual void set_font(const vcl::Font& rFont) override
@@ -5407,6 +5467,14 @@ public:
             pEntry = g_list_next(pEntry);
         }
         g_list_free(pColumns);
+    }
+
+    virtual int get_column_width(int nColumn) const override
+    {
+        GList *pColumns = gtk_tree_view_get_columns(m_pTreeView);
+        GtkTreeViewColumn* pColumn = GTK_TREE_VIEW_COLUMN(g_list_nth_data(pColumns, nColumn));
+        assert(pColumn && "wrong count");
+        return gtk_tree_view_column_get_fixed_width(pColumn) - gtk_tree_view_column_get_spacing(pColumn);
     }
 
     virtual OUString get_column_title(int nColumn) const override
@@ -8231,6 +8299,15 @@ public:
             return nullptr;
         auto_add_parentless_widgets_to_container(GTK_WIDGET(pButton));
         return o3tl::make_unique<GtkInstanceMenuButton>(pButton, this, bTakeOwnership);
+    }
+
+    virtual std::unique_ptr<weld::LinkButton> weld_link_button(const OString &id, bool bTakeOwnership) override
+    {
+        GtkLinkButton* pButton = GTK_LINK_BUTTON(gtk_builder_get_object(m_pBuilder, id.getStr()));
+        if (!pButton)
+            return nullptr;
+        auto_add_parentless_widgets_to_container(GTK_WIDGET(pButton));
+        return std::make_unique<GtkInstanceLinkButton>(pButton, this, bTakeOwnership);
     }
 
     virtual std::unique_ptr<weld::ToggleButton> weld_toggle_button(const OString &id, bool bTakeOwnership) override

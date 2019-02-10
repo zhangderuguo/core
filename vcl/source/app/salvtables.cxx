@@ -37,6 +37,7 @@
 #include <vcl/lstbox.hxx>
 #include <vcl/dialog.hxx>
 #include <vcl/fixed.hxx>
+#include <vcl/fixedhyper.hxx>
 #include <vcl/fmtfield.hxx>
 #include <vcl/headbar.hxx>
 #include <vcl/layout.hxx>
@@ -363,6 +364,11 @@ void SalInstanceWidget::set_grid_left_attach(int nAttach)
 int SalInstanceWidget::get_grid_left_attach() const
 {
     return m_xWidget->get_grid_left_attach();
+}
+
+vcl::Font SalInstanceWidget::get_font()
+{
+    return m_xWidget->GetPointFont(*m_xWidget);
 }
 
 void SalInstanceWidget::set_grid_width(int nCols)
@@ -1438,6 +1444,51 @@ IMPL_LINK_NOARG(SalInstanceMenuButton, ActivateHdl, ::MenuButton*, void)
     signal_toggled();
 }
 
+class SalInstanceLinkButton : public SalInstanceContainer, public virtual weld::LinkButton
+{
+private:
+    VclPtr<FixedHyperlink> m_xButton;
+
+    DECL_LINK(ClickHdl, FixedHyperlink&, void);
+public:
+    SalInstanceLinkButton(FixedHyperlink* pButton, SalInstanceBuilder* pBuilder, bool bTakeOwnership)
+        : SalInstanceContainer(pButton, pBuilder, bTakeOwnership)
+        , m_xButton(pButton)
+    {
+        m_xButton->SetClickHdl(LINK(this, SalInstanceLinkButton, ClickHdl));
+    }
+
+    virtual void set_label(const OUString& rText) override
+    {
+        m_xButton->SetText(rText);
+    }
+
+    virtual OUString get_label() const override
+    {
+        return m_xButton->GetText();
+    }
+
+    virtual void set_uri(const OUString& rUri) override
+    {
+        m_xButton->SetURL(rUri);
+    }
+
+    virtual OUString get_uri() const override
+    {
+        return m_xButton->GetURL();
+    }
+
+    virtual ~SalInstanceLinkButton() override
+    {
+        m_xButton->SetClickHdl(Link<FixedHyperlink&,void>());
+    }
+};
+
+IMPL_LINK_NOARG(SalInstanceLinkButton, ClickHdl, FixedHyperlink&, void)
+{
+    signal_clicked();
+}
+
 class SalInstanceRadioButton : public SalInstanceButton, public virtual weld::RadioButton
 {
 private:
@@ -1794,7 +1845,7 @@ vcl::Font SalInstanceEntry::get_font()
 
 void SalInstanceEntry::set_font(const vcl::Font& rFont)
 {
-    m_xEntry->SetFont(rFont);
+    m_xEntry->SetPointFont(*m_xEntry, rFont);
     m_xEntry->Invalidate();
 }
 
@@ -1916,6 +1967,15 @@ public:
         }
         // call Resize to recalculate based on the new tabs
         m_xTreeView->Resize();
+    }
+
+    virtual int get_column_width(int nColumn) const override
+    {
+        // GetTab(0) gives the position of the bitmap which is automatically inserted by the TabListBox.
+        // So the first text column's width is Tab(2)-Tab(1).
+        auto nWidthPixel = m_xTreeView->GetLogicTab(nColumn + 2) - m_xTreeView->GetLogicTab(nColumn + 1);
+        nWidthPixel -= SV_TAB_BORDER;
+        return nWidthPixel;
     }
 
     virtual OUString get_column_title(int nColumn) const override
@@ -3390,6 +3450,12 @@ std::unique_ptr<weld::MenuButton> SalInstanceBuilder::weld_menu_button(const OSt
 {
     MenuButton* pButton = m_xBuilder->get<MenuButton>(id);
     return pButton ? o3tl::make_unique<SalInstanceMenuButton>(pButton, this, bTakeOwnership) : nullptr;
+}
+
+std::unique_ptr<weld::LinkButton> SalInstanceBuilder::weld_link_button(const OString &id, bool bTakeOwnership)
+{
+    FixedHyperlink* pButton = m_xBuilder->get<FixedHyperlink>(id);
+    return pButton ? std::make_unique<SalInstanceLinkButton>(pButton, this, bTakeOwnership) : nullptr;
 }
 
 std::unique_ptr<weld::ToggleButton> SalInstanceBuilder::weld_toggle_button(const OString &id, bool bTakeOwnership)

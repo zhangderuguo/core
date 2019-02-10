@@ -56,6 +56,9 @@ public:
     virtual std::unique_ptr<weld::MenuButton>
     weld_menu_button(const OString& id, bool bTakeOwnership = false) override;
 
+    virtual std::unique_ptr<weld::LinkButton>
+    weld_link_button(const OString &id, bool bTakeOwnership = false) override;
+
     virtual std::unique_ptr<weld::ToggleButton>
     weld_toggle_button(const OString& id, bool bTakeOwnership = false) override;
 
@@ -244,6 +247,8 @@ public:
     virtual void freeze() override;
 
     virtual void thaw() override;
+
+    virtual vcl::Font get_font() override;
 
     virtual weld::Container* weld_parent() const override;
 
