@@ -457,6 +457,11 @@ public:
     {
         insert(nullptr, pos, &rStr, pId, pIconName, pImageSurface, nullptr, false);
     }
+    void insert(int nRow)
+    {
+        insert(nullptr, nRow, nullptr, nullptr, nullptr, nullptr, nullptr, false);
+    }
+    void append() { insert(-1); }
     void insert_text(int pos, const OUString& rStr)
     {
         insert(nullptr, pos, &rStr, nullptr, nullptr, nullptr, nullptr, false);
