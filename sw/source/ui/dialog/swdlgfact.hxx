@@ -86,7 +86,7 @@ public:
     virtual short Execute() override;
     virtual void  UpdateCounts() override;
     virtual void  SetCounts(const SwDocStat &rCurrCnt, const SwDocStat &rDocStat) override;
-    virtual std::shared_ptr<SfxModelessDialogController> GetController() override;
+    virtual std::shared_ptr<SfxDialogController> GetController() override;
 };
 
 class AbstractSwInsertAbstractDlg_Impl : public AbstractSwInsertAbstractDlg
@@ -575,7 +575,7 @@ public:
     }
     virtual short Execute() override;
     virtual void ReInitDlg(SwWrtShell& rWrtShell) override;
-    virtual std::shared_ptr<SfxModelessDialogController> GetController() override;
+    virtual std::shared_ptr<SfxDialogController> GetController() override;
 };
 
 class SwAuthMarkFloatDlg;
@@ -590,7 +590,7 @@ public:
     }
     virtual short Execute() override;
     virtual void ReInitDlg(SwWrtShell& rWrtShell) override;
-    virtual std::shared_ptr<SfxModelessDialogController> GetController() override;
+    virtual std::shared_ptr<SfxDialogController> GetController() override;
 };
 
 class SwMailMergeWizard;

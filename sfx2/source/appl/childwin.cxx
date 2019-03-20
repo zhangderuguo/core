@@ -195,11 +195,12 @@ SfxChildWindow::~SfxChildWindow()
     pContext.reset();
     ClearWorkwin();
     if (xController)
-        xController->DeInit();
-    else
-        pWindow.disposeAndClear();
+    {
+        xController->ChildWinDispose();
+        xController.reset();
+    }
+    pWindow.disposeAndClear();
 }
-
 
 SfxChildWindow* SfxChildWindow::CreateChildWindow( sal_uInt16 nId,
         vcl::Window *pParent, SfxBindings* pBindings, SfxChildWinInfo const & rInfo)

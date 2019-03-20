@@ -411,8 +411,6 @@ SfxModelessDialogController::SfxModelessDialogController(SfxBindings* pBindinx,
     : SfxDialogController(pParent, rUIXMLDescription, rID)
 {
     Init(pBindinx, pCW);
-    m_xDialog->connect_focus_in(LINK(this, SfxModelessDialogController, FocusInHdl));
-    m_xDialog->connect_focus_out(LINK(this, SfxModelessDialogController, FocusOutHdl));
 }
 
 void SfxModelessDialogController::Init(SfxBindings *pBindinx, SfxChildWindow *pCW)
@@ -445,16 +443,25 @@ void SfxModelessDialogController::DeInit()
     If a ModelessDialog is enabled its ViewFrame will be activated.
     This is necessary by PluginInFrames.
 */
-IMPL_LINK_NOARG(SfxModelessDialogController, FocusInHdl, weld::Widget&, void)
+IMPL_LINK_NOARG(SfxDialogController, FocusInHdl, weld::Widget&, void)
+{
+    Activate();
+}
+
+void SfxModelessDialogController::Activate()
 {
     if (!m_xImpl)
         return;
     m_pBindings->SetActiveFrame(m_xImpl->pMgr->GetFrame());
     m_xImpl->pMgr->Activate_Impl();
-    Activate();
 }
 
-IMPL_LINK_NOARG(SfxModelessDialogController, FocusOutHdl, weld::Widget&, void)
+IMPL_LINK_NOARG(SfxDialogController, FocusOutHdl, weld::Widget&, void)
+{
+    DeActivate();
+}
+
+void SfxModelessDialogController::DeActivate()
 {
     if (!m_xImpl)
         return;
@@ -472,13 +479,32 @@ SfxModelessDialogController::~SfxModelessDialogController()
         m_pBindings->SetActiveFrame(nullptr);
 }
 
-void SfxModelessDialogController::EndDialog()
+void SfxDialogController::EndDialog()
 {
     if (!m_xDialog->get_visible())
         return;
-    m_xImpl->bClosing = true;
     response(RET_CLOSE);
+}
+
+void SfxModelessDialogController::EndDialog()
+{
+    m_xImpl->bClosing = true;
+    SfxDialogController::EndDialog();
     m_xImpl->bClosing = false;
+}
+
+void SfxModelessDialogController::ChildWinDispose()
+{
+    if (m_xImpl->pMgr)
+    {
+        WindowStateMask nMask = WindowStateMask::Pos | WindowStateMask::State;
+        if (m_xDialog->get_resizable())
+            nMask |= WindowStateMask::Width | WindowStateMask::Height;
+        m_xImpl->aWinState = m_xDialog->get_window_state(nMask);
+        GetBindings().GetWorkWindow_Impl()->ConfigChild_Impl( SfxChildIdentifier::DOCKINGWINDOW, SfxDockingConfig::ALIGNDOCKINGWINDOW, m_xImpl->pMgr->GetType() );
+    }
+
+    m_xImpl->pMgr = nullptr;
 }
 
 /*  [Description]
@@ -843,6 +869,8 @@ SfxDialogController::SfxDialogController(weld::Widget* pParent, const OUString& 
                                     && SfxViewShell::Current()->isLOKMobilePhone())
 {
     m_xDialog->SetInstallLOKNotifierHdl(LINK(this, SfxDialogController, InstallLOKNotifierHdl));
+    m_xDialog->connect_focus_in(LINK(this, SfxDialogController, FocusInHdl));
+    m_xDialog->connect_focus_out(LINK(this, SfxDialogController, FocusOutHdl));
 }
 
 IMPL_STATIC_LINK_NOARG(SfxDialogController, InstallLOKNotifierHdl, void*, vcl::ILibreOfficeKitNotifier*)

@@ -889,7 +889,7 @@ SfxChild_Impl* SfxWorkWindow::RegisterChild_Impl( vcl::Window& rWindow,
     return aChildren.back();
 }
 
-SfxChild_Impl* SfxWorkWindow::RegisterChild_Impl(std::shared_ptr<SfxModelessDialogController>& rController,
+SfxChild_Impl* SfxWorkWindow::RegisterChild_Impl(std::shared_ptr<SfxDialogController>& rController,
                     SfxChildAlignment eAlign )
 {
     DBG_ASSERT( aChildren.size() < 255, "too many children" );
@@ -927,7 +927,7 @@ void SfxWorkWindow::ReleaseChild_Impl( vcl::Window& rWindow )
     }
 }
 
-void SfxWorkWindow::ReleaseChild_Impl(SfxModelessDialogController& rController)
+void SfxWorkWindow::ReleaseChild_Impl(SfxDialogController& rController)
 {
 
     SfxChild_Impl *pChild = nullptr;
