@@ -591,7 +591,9 @@ bool ImpEditEngine::MouseButtonUp( const MouseEvent& rMEvt, EditView* pView )
             }
             else
             {
-                pFld = pView->GetFieldUnderMousePointer();
+                const OutputDevice& rOutDev = pView->getEditViewCallbacks() ? pView->getEditViewCallbacks()->EditViewOutputDevice() : *pView->GetWindow();
+                Point aLogicClick = rOutDev.PixelToLogic( rMEvt.GetPosPixel() );
+                pFld = pView->GetField( aLogicClick );
             }
             if ( pFld )
             {

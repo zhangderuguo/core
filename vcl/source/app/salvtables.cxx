@@ -43,6 +43,7 @@
 #include <vcl/layout.hxx>
 #include <vcl/menubtn.hxx>
 #include <vcl/prgsbar.hxx>
+#include <vcl/ptrstyle.hxx>
 #include <vcl/slider.hxx>
 #include <vcl/sysdata.hxx>
 #include <vcl/svlbitm.hxx>
@@ -1796,6 +1797,11 @@ bool SalInstanceEntry::get_selection_bounds(int& rStartPos, int &rEndPos)
     return rSelection.Len();
 }
 
+void SalInstanceEntry::replace_selection(const OUString& rText)
+{
+    m_xEntry->ReplaceSelected(rText);
+}
+
 void SalInstanceEntry::set_position(int nCursorPos)
 {
     disable_notify_events();
@@ -2955,6 +2961,11 @@ public:
     virtual void connect_key_release(const Link<const KeyEvent&, bool>& rLink) override
     {
         weld::Widget::connect_key_release(rLink);
+    }
+
+    virtual void set_text_cursor() override
+    {
+        m_xDrawingArea->SetPointer(PointerStyle::Text);
     }
 
     virtual a11yref get_accessible_parent() override

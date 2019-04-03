@@ -191,10 +191,10 @@ static void lcl_translateTwips(vcl::Window const & rParent, vcl::Window& rChild)
 // change/update the Selection visualization for enhanced mechanisms
 void ImpEditView::SelectionChanged()
 {
-    if (hasEditViewCallbacks())
+    if (getEditViewCallbacks())
     {
         // use callback to tell about change in selection visualisation
-        mpEditViewCallbacks->EditViewSelectionChange();
+        getEditViewCallbacks()->EditViewSelectionChange();
     }
 }
 
@@ -209,7 +209,7 @@ void ImpEditView::SelectionChanged()
 // the Region*, see GetSelectionRectangles below.
 void ImpEditView::DrawSelectionXOR( EditSelection aTmpSel, vcl::Region* pRegion, OutputDevice* pTargetDevice )
 {
-    if (hasEditViewCallbacks() && !pRegion && !comphelper::LibreOfficeKit::isActive())
+    if (getEditViewCallbacks() && !pRegion && !comphelper::LibreOfficeKit::isActive())
     {
         // we are done, do *not* visualize self
         // CAUTION: do not use when comphelper::LibreOfficeKit::isActive()
@@ -235,7 +235,11 @@ void ImpEditView::DrawSelectionXOR( EditSelection aTmpSel, vcl::Region* pRegion,
     if (comphelper::LibreOfficeKit::isActive() && !pRegion)
         pRegion = &aRegion;
 
-    OutputDevice* pTarget = pTargetDevice ? pTargetDevice : pOutWin;
+    OutputDevice* pTarget;
+    if (pTargetDevice)
+        pTarget = pTargetDevice;
+    else
+        pTarget = getEditViewCallbacks() ? &getEditViewCallbacks()->EditViewOutputDevice() : pOutWin;
     bool bClipRegion = pTarget->IsClipRegion();
     vcl::Region aOldRegion = pTarget->GetClipRegion();
 
@@ -258,7 +262,7 @@ void ImpEditView::DrawSelectionXOR( EditSelection aTmpSel, vcl::Region* pRegion,
             aTmpOutArea.SetRight( aTmpOutArea.Left() + pEditEngine->pImpEditEngine->GetPaperSize().Width() );
         pTarget->IntersectClipRegion( aTmpOutArea );
 
-        if ( pOutWin->GetCursor() )
+        if (pOutWin && pOutWin->GetCursor())
             pOutWin->GetCursor()->Hide();
     }
     else
@@ -387,7 +391,7 @@ void ImpEditView::DrawSelectionXOR( EditSelection aTmpSel, vcl::Region* pRegion,
     {
         *pRegion = vcl::Region( *pPolyPoly );
 
-        if (comphelper::LibreOfficeKit::isActive() && mpViewShell && !pOldRegion)
+        if (comphelper::LibreOfficeKit::isActive() && mpViewShell && !pOldRegion && pOutWin)
         {
             VclPtr<vcl::Window> pParent = pOutWin->GetParentWithLOKNotifier();
             if (pParent && pParent->GetLOKWindowId() != 0)
@@ -514,7 +518,7 @@ void ImpEditView::DrawSelectionXOR( EditSelection aTmpSel, vcl::Region* pRegion,
     }
     else
     {
-        if ( pOutWin->GetCursor() )
+        if (pOutWin && pOutWin->GetCursor())
             pOutWin->GetCursor()->Show();
 
         if ( bClipRegion )
@@ -682,9 +686,10 @@ void ImpEditView::SetSelectionMode( EESelectionMode eNewMode )
 
 void ImpEditView::SetOutputArea( const tools::Rectangle& rRect )
 {
+    const OutputDevice& rOutDev = getEditViewCallbacks() ? getEditViewCallbacks()->EditViewOutputDevice() : *pOutWin;
     // should be better be aligned on pixels!
-    tools::Rectangle aNewRect( pOutWin->LogicToPixel( rRect ) );
-    aNewRect = pOutWin->PixelToLogic( aNewRect );
+    tools::Rectangle aNewRect(rOutDev.LogicToPixel(rRect));
+    aNewRect = rOutDev.PixelToLogic(aNewRect);
     aOutArea = aNewRect;
     if ( aOutArea.Right() < aOutArea.Left() )
         aOutArea.SetRight( aOutArea.Left() );
@@ -699,12 +704,12 @@ void ImpEditView::SetOutputArea( const tools::Rectangle& rRect )
 
 void ImpEditView::InvalidateAtWindow(const tools::Rectangle& rRect)
 {
-    if (hasEditViewCallbacks())
+    if (getEditViewCallbacks())
     {
         // do not invalidate and trigger a global repaint, but forward
         // the need for change to the applied EditViewCallback, can e.g.
         // be used to visualize the active edit text in an OverlayObject
-        mpEditViewCallbacks->EditViewInvalidate();
+        getEditViewCallbacks()->EditViewInvalidate(rRect);
     }
     else
     {
@@ -1005,8 +1010,8 @@ void ImpEditView::ShowCursor( bool bGotoCursor, bool bForceVisCursor )
     if ( pEditEngine->pImpEditEngine->IsInUndo() )
         return;
 
-    if ( pOutWin->GetCursor() != GetCursor() )
-        pOutWin->SetCursor( GetCursor() );
+    if (pOutWin && pOutWin->GetCursor() != GetCursor())
+        pOutWin->SetCursor(GetCursor());
 
     EditPaM aPaM( aEditSelection.Max() );
 
@@ -1137,7 +1142,9 @@ void ImpEditView::ShowCursor( bool bGotoCursor, bool bForceVisCursor )
             aEditCursor.SetTop( GetVisDocTop() );
     }
 
-    long nOnePixel = pOutWin->PixelToLogic( Size( 1, 0 ) ).Width();
+    const OutputDevice& rOutDev = getEditViewCallbacks() ? getEditViewCallbacks()->EditViewOutputDevice() : *pOutWin;
+
+    long nOnePixel = rOutDev.PixelToLogic( Size( 1, 0 ) ).Width();
 
     if ( ( aEditCursor.Top() + nOnePixel >= GetVisDocTop() ) &&
          ( aEditCursor.Bottom() - nOnePixel <= GetVisDocBottom() ) &&
@@ -1152,8 +1159,8 @@ void ImpEditView::ShowCursor( bool bGotoCursor, bool bForceVisCursor )
         aCursorSz.AdjustHeight( -1 );
         if ( !aCursorSz.Width() || !aCursorSz.Height() )
         {
-            long nCursorSz = pOutWin->GetSettings().GetStyleSettings().GetCursorSize();
-            nCursorSz = pOutWin->PixelToLogic( Size( nCursorSz, 0 ) ).Width();
+            long nCursorSz = rOutDev.GetSettings().GetStyleSettings().GetCursorSize();
+            nCursorSz = rOutDev.PixelToLogic( Size( nCursorSz, 0 ) ).Width();
             if ( !aCursorSz.Width() )
                 aCursorSz.setWidth( nCursorSz );
             if ( !aCursorSz.Height() )
@@ -1177,7 +1184,7 @@ void ImpEditView::ShowCursor( bool bGotoCursor, bool bForceVisCursor )
         if (comphelper::LibreOfficeKit::isActive() && mpViewShell)
         {
             Point aPos = GetCursor()->GetPos();
-            if (pOutWin->IsChart())
+            if (pOutWin && pOutWin->IsChart())
             {
                 const vcl::Window* pViewShellWindow = mpViewShell->GetEditWindowForActiveOLEObj();
                 if (pViewShellWindow && pViewShellWindow->IsAncestorOf(*pOutWin))
@@ -1191,12 +1198,12 @@ void ImpEditView::ShowCursor( bool bGotoCursor, bool bForceVisCursor )
             tools::Rectangle aRect(aPos.getX(), aPos.getY(), aPos.getX() + GetCursor()->GetWidth(), aPos.getY() + GetCursor()->GetHeight());
 
             // LOK output is always in twips, convert from mm100 if necessary.
-            if (pOutWin->GetMapMode().GetMapUnit() == MapUnit::Map100thMM)
+            if (rOutDev.GetMapMode().GetMapUnit() == MapUnit::Map100thMM)
                 aRect = OutputDevice::LogicToLogic(aRect, MapMode(MapUnit::Map100thMM), MapMode(MapUnit::MapTwip));
-            else if (pOutWin->GetMapMode().GetMapUnit() == MapUnit::MapTwip)
+            else if (rOutDev.GetMapMode().GetMapUnit() == MapUnit::MapTwip)
             {
                 // Writer comments: they use editeng, but are separate widgets.
-                Point aOrigin = pOutWin->GetMapMode().GetOrigin();
+                Point aOrigin = rOutDev.GetMapMode().GetOrigin();
                 // Move the rectangle, so that we output absolute twips.
                 aRect.Move(aOrigin.getX(), aOrigin.getY());
             }
@@ -1267,8 +1274,11 @@ void ImpEditView::ShowCursor( bool bGotoCursor, bool bForceVisCursor )
         {
             SvxFont aFont;
             pEditEngine->SeekCursor( aPaM.GetNode(), aPaM.GetIndex()+1, aFont );
-            InputContextFlags const nContextFlags = InputContextFlags::Text | InputContextFlags::ExtText;
-            GetWindow()->SetInputContext( InputContext( aFont, nContextFlags ) );
+            if (vcl::Window* pWindow = GetWindow())
+            {
+                InputContextFlags const nContextFlags = InputContextFlags::Text | InputContextFlags::ExtText;
+                pWindow->SetInputContext( InputContext( aFont, nContextFlags ) );
+            }
         }
     }
     else
@@ -1478,16 +1488,19 @@ bool ImpEditView::MouseButtonUp( const MouseEvent& rMouseEvent )
     nExtraCursorFlags = GetCursorFlags::NONE;
     bClickedInSelection = false;
 
-    if ( rMouseEvent.IsMiddle() && !bReadOnly &&
-         ( GetWindow()->GetSettings().GetMouseSettings().GetMiddleButtonAction() == MouseMiddleButtonAction::PasteSelection ) )
+    if (vcl::Window* pWindow = GetWindow())
     {
-        Reference<css::datatransfer::clipboard::XClipboard> aClipBoard(GetWindow()->GetPrimarySelection());
-        Paste( aClipBoard );
-    }
-    else if ( rMouseEvent.IsLeft() && GetEditSelection().HasRange() )
-    {
-        Reference<css::datatransfer::clipboard::XClipboard> aClipBoard(GetWindow()->GetPrimarySelection());
-        CutCopy( aClipBoard, false );
+        if ( rMouseEvent.IsMiddle() && !bReadOnly &&
+             ( pWindow->GetSettings().GetMouseSettings().GetMiddleButtonAction() == MouseMiddleButtonAction::PasteSelection ) )
+        {
+            Reference<css::datatransfer::clipboard::XClipboard> aClipBoard(pWindow->GetPrimarySelection());
+            Paste( aClipBoard );
+        }
+        else if ( rMouseEvent.IsLeft() && GetEditSelection().HasRange() )
+        {
+            Reference<css::datatransfer::clipboard::XClipboard> aClipBoard(pWindow->GetPrimarySelection());
+            CutCopy( aClipBoard, false );
+        }
     }
 
     return pEditEngine->pImpEditEngine->MouseButtonUp( rMouseEvent, GetEditViewPtr() );
@@ -1848,7 +1861,8 @@ bool ImpEditView::IsSelectionAtPoint( const Point& rPosPixel )
     Point aMousePos( rPosPixel );
 
     // Logical units ...
-    aMousePos = GetWindow()->PixelToLogic( aMousePos );
+    const OutputDevice& rOutDev = getEditViewCallbacks() ? getEditViewCallbacks()->EditViewOutputDevice() : *GetWindow();
+    aMousePos = rOutDev.PixelToLogic(aMousePos);
 
     if ( ( !GetOutputArea().IsInside( aMousePos ) ) && !pEditEngine->pImpEditEngine->IsInSelectionMode() )
     {
@@ -1867,7 +1881,8 @@ bool ImpEditView::SetCursorAtPoint( const Point& rPointPixel )
     Point aMousePos( rPointPixel );
 
     // Logical units ...
-    aMousePos = GetWindow()->PixelToLogic( aMousePos );
+    const OutputDevice& rOutDev = getEditViewCallbacks() ? getEditViewCallbacks()->EditViewOutputDevice() : *GetWindow();
+    aMousePos = rOutDev.PixelToLogic( aMousePos );
 
     if ( ( !GetOutputArea().IsInside( aMousePos ) ) && !pEditEngine->pImpEditEngine->IsInSelectionMode() )
     {

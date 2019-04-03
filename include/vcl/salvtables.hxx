@@ -429,6 +429,8 @@ public:
 
     bool get_selection_bounds(int& rStartPos, int& rEndPos) override;
 
+    virtual void replace_selection(const OUString& rText) override;
+
     virtual void set_position(int nCursorPos) override;
 
     virtual int get_position() const override;

@@ -135,27 +135,49 @@ static void ImplCursorInvert( ImplCursorData const * pData )
         pGuard->SetPaintRect(pRenderContext->PixelToLogic(aPaintRect));
 }
 
-void vcl::Cursor::ImplDraw()
+bool vcl::Cursor::ImplPrepForDraw(OutputDevice* pDevice, ImplCursorData& rData)
 {
-    if ( mpData && mpData->mpWindow && !mpData->mbCurVisible )
+    if (pDevice && !rData.mbCurVisible)
     {
-        vcl::Window* pWindow         = mpData->mpWindow;
-        mpData->maPixPos        = pWindow->LogicToPixel( maPos );
-        mpData->maPixSize       = pWindow->LogicToPixel( maSize );
-        mpData->mnPixSlant      = 0;
-        mpData->mnOrientation   = mnOrientation;
-        mpData->mnDirection     = mnDirection;
+        rData.maPixPos        = pDevice->LogicToPixel( maPos );
+        rData.maPixSize       = pDevice->LogicToPixel( maSize );
+        rData.mnPixSlant      = 0;
+        rData.mnOrientation   = mnOrientation;
+        rData.mnDirection     = mnDirection;
 
         // correct the position with the offset
-        mpData->maPixRotOff = mpData->maPixPos;
+        rData.maPixRotOff = rData.maPixPos;
 
         // use width (as set in Settings) if size is 0,
-        if ( !mpData->maPixSize.Width() )
-            mpData->maPixSize.setWidth( pWindow->GetSettings().GetStyleSettings().GetCursorSize() );
+        if (!rData.maPixSize.Width())
+            rData.maPixSize.setWidth(pDevice->GetSettings().GetStyleSettings().GetCursorSize());
+        return true;
+    }
+    return false;
+}
 
-        // calculate output area and display
-        ImplCursorInvert( mpData.get() );
-        mpData->mbCurVisible = true;
+void vcl::Cursor::ImplDraw()
+{
+    if (mpData && mpData->mpWindow)
+    {
+        // calculate output area
+        if (ImplPrepForDraw(mpData->mpWindow, *mpData))
+        {
+            // display
+            ImplCursorInvert(mpData.get());
+            mpData->mbCurVisible = true;
+        }
+    }
+}
+
+void vcl::Cursor::DrawToDevice(OutputDevice& rRenderContext)
+{
+    ImplCursorData aData;
+    // calculate output area
+    if (ImplPrepForDraw(&rRenderContext, aData))
+    {
+        // display
+        ImplCursorInvert(&aData);
     }
 }
 

@@ -174,9 +174,9 @@ void EditView::setEditViewCallbacks(const EditViewCallbacks* pEditViewCallbacks)
     pImpEditView->setEditViewCallbacks(pEditViewCallbacks);
 }
 
-bool EditView::hasEditViewCallbacks() const
+const EditViewCallbacks* EditView::getEditViewCallbacks() const
 {
-    return pImpEditView->hasEditViewCallbacks();
+    return pImpEditView->getEditViewCallbacks();
 }
 
 ImpEditEngine* EditView::GetImpEditEngine() const
@@ -207,12 +207,12 @@ tools::Rectangle EditView::GetInvalidateRect() const
 
 void EditView::InvalidateWindow(const tools::Rectangle& rClipRect)
 {
-    if (pImpEditView->hasEditViewCallbacks())
+    if (const EditViewCallbacks* pEditViewCallbacks = pImpEditView->getEditViewCallbacks())
     {
         // do not invalidate and trigger a global repaint, but forward
         // the need for change to the applied EditViewCallback, can e.g.
         // be used to visualize the active edit text in an OverlayObject
-        pImpEditView->mpEditViewCallbacks->EditViewInvalidate();
+        pEditViewCallbacks->EditViewInvalidate(rClipRect);
     }
     else
     {
@@ -237,7 +237,7 @@ void EditView::InvalidateOtherViewWindows( const tools::Rectangle& rInvRect )
 void EditView::Invalidate()
 {
     const tools::Rectangle& rInvRect = GetInvalidateRect();
-    pImpEditView->GetWindow()->Invalidate( rInvRect );
+    pImpEditView->InvalidateAtWindow(rInvRect);
     InvalidateOtherViewWindows( rInvRect );
 }
 

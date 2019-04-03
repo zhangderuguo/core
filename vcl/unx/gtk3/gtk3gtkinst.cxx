@@ -2126,6 +2126,21 @@ weld::Container* GtkInstanceWidget::weld_parent() const
     return pParent ? new GtkInstanceContainer(GTK_CONTAINER(pParent), m_pBuilder, false) : nullptr;
 }
 
+namespace
+{
+    void set_cursor(GtkWidget* pWidget, const char *pName)
+    {
+        if (!gtk_widget_get_realized(pWidget))
+            gtk_widget_realize(pWidget);
+        GdkDisplay *pDisplay = gtk_widget_get_display(pWidget);
+        GdkCursor *pCursor = pName ? gdk_cursor_new_from_name(pDisplay, pName) : nullptr;
+        gdk_window_set_cursor(gtk_widget_get_window(pWidget), pCursor);
+        gdk_display_flush(pDisplay);
+        if (pCursor)
+            g_object_unref(pCursor);
+    }
+}
+
 class GtkInstanceWindow : public GtkInstanceContainer, public virtual weld::Window
 {
 private:
@@ -2170,14 +2185,7 @@ public:
 
     virtual void set_busy_cursor(bool bBusy) override
     {
-        if (!gtk_widget_get_realized(m_pWidget))
-            gtk_widget_realize(m_pWidget);
-        GdkDisplay *pDisplay = gtk_widget_get_display(m_pWidget);
-        GdkCursor *pCursor = bBusy ? gdk_cursor_new_from_name(pDisplay, "progress") : nullptr;
-        gdk_window_set_cursor(gtk_widget_get_window(m_pWidget), pCursor);
-        gdk_display_flush(pDisplay);
-        if (pCursor)
-            g_object_unref(pCursor);
+        set_cursor(m_pWidget, bBusy ? "progress" : nullptr);
     }
 
     virtual void set_modal(bool bModal) override
@@ -4897,6 +4905,17 @@ public:
         return gtk_editable_get_selection_bounds(GTK_EDITABLE(m_pEntry), &rStartPos, &rEndPos);
     }
 
+    virtual void replace_selection(const OUString& rText) override
+    {
+        disable_notify_events();
+        gtk_editable_delete_selection(GTK_EDITABLE(m_pEntry));
+        OString sText(OUStringToOString(rText, RTL_TEXTENCODING_UTF8));
+        gint position = gtk_editable_get_position(GTK_EDITABLE(m_pEntry));
+        gtk_editable_insert_text(GTK_EDITABLE(m_pEntry), sText.getStr(), sText.getLength(),
+                                 &position);
+        enable_notify_events();
+    }
+
     virtual void set_position(int nCursorPos) override
     {
         disable_notify_events();
@@ -6778,6 +6797,11 @@ public:
     {
         GtkInstanceWidget::set_direction(bRTL);
         m_xDevice->EnableRTL(bRTL);
+    }
+
+    virtual void set_text_cursor() override
+    {
+        set_cursor(GTK_WIDGET(m_pDrawingArea), "text");
     }
 
     virtual void queue_draw() override

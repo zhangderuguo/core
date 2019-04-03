@@ -269,9 +269,9 @@ private:
     const EditViewCallbacks* mpEditViewCallbacks;
     bool mbBroadcastLOKViewCursor;
 
-    bool hasEditViewCallbacks() const
+    const EditViewCallbacks* getEditViewCallbacks() const
     {
-        return nullptr != mpEditViewCallbacks;
+        return mpEditViewCallbacks;
     }
 
     void setEditViewCallbacks(const EditViewCallbacks* pEditViewCallbacks)
