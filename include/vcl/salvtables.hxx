@@ -352,11 +352,21 @@ class SalInstanceDialog : public SalInstanceWindow, public virtual weld::Dialog
 private:
     VclPtr<::Dialog> m_xDialog;
 
+    // for calc ref dialog that shrink to range selection widgets and resize back
+    VclPtr<vcl::Window> m_xRefEdit;
+    std::vector<VclPtr<vcl::Window>> m_aHiddenWidgets; // vector of hidden Controls
+    long m_nOldEditWidthReq; // Original width request of the input field
+    sal_Int32 m_nOldBorderWidth; // border width for expanded dialog
+
 public:
     SalInstanceDialog(::Dialog* pDialog, SalInstanceBuilder* pBuilder, bool bTakeOwnership);
 
     virtual bool runAsync(std::shared_ptr<weld::DialogController> aOwner,
                           const std::function<void(sal_Int32)>& rEndDialogFn) override;
+
+    virtual void collapse(weld::Widget* pEdit, weld::Widget* pButton) override;
+
+    virtual void undo_collapse() override;
 
     virtual void
     SetInstallLOKNotifierHdl(const Link<void*, vcl::ILibreOfficeKitNotifier*>& rLink) override;

@@ -853,6 +853,8 @@ IMPL_LINK_NOARG(SalInstanceWindow, HelpHdl, vcl::Window&, bool)
 SalInstanceDialog::SalInstanceDialog(::Dialog* pDialog, SalInstanceBuilder* pBuilder, bool bTakeOwnership)
     : SalInstanceWindow(pDialog, pBuilder, bTakeOwnership)
     , m_xDialog(pDialog)
+    , m_nOldEditWidthReq(0)
+    , m_nOldBorderWidth(0)
 {
 }
 
@@ -862,6 +864,92 @@ bool SalInstanceDialog::runAsync(std::shared_ptr<weld::DialogController> aOwner,
     aCtx.mxOwnerDialog = aOwner;
     aCtx.maEndDialogFn = rEndDialogFn;
     return m_xDialog->StartExecuteAsync(aCtx);
+}
+
+typedef std::set<VclPtr<vcl::Window> > winset;
+
+namespace
+{
+    void hideUnless(const vcl::Window *pTop, const winset& rVisibleWidgets,
+        std::vector<VclPtr<vcl::Window> > &rWasVisibleWidgets)
+    {
+        for (vcl::Window* pChild = pTop->GetWindow(GetWindowType::FirstChild); pChild;
+            pChild = pChild->GetWindow(GetWindowType::Next))
+        {
+            if (!pChild->IsVisible())
+                continue;
+            if (rVisibleWidgets.find(pChild) == rVisibleWidgets.end())
+            {
+                rWasVisibleWidgets.emplace_back(pChild);
+                pChild->Hide();
+            }
+            else if (isContainerWindow(pChild))
+            {
+                hideUnless(pChild, rVisibleWidgets, rWasVisibleWidgets);
+            }
+        }
+    }
+}
+
+void SalInstanceDialog::collapse(weld::Widget* pEdit, weld::Widget* pButton)
+{
+    SalInstanceWidget* pVclEdit = dynamic_cast<SalInstanceWidget*>(pEdit);
+    SalInstanceWidget* pVclButton = dynamic_cast<SalInstanceWidget*>(pButton);
+
+    vcl::Window* pRefEdit = pVclEdit->getWidget();
+    vcl::Window* pRefBtn = pVclButton ? pVclButton->getWidget() : nullptr;
+
+    auto nOldEditWidth = pRefEdit->GetSizePixel().Width();
+    m_nOldEditWidthReq = pRefEdit->get_width_request();
+
+    //We want just pRefBtn and pRefEdit to be shown
+    //mark widgets we want to be visible, starting with pRefEdit
+    //and all its direct parents.
+    winset aVisibleWidgets;
+    vcl::Window *pContentArea = m_xDialog->get_content_area();
+    for (vcl::Window *pCandidate = pRefEdit;
+        pCandidate && (pCandidate != pContentArea && pCandidate->IsVisible());
+        pCandidate = pCandidate->GetWindow(GetWindowType::RealParent))
+    {
+        aVisibleWidgets.insert(pCandidate);
+    }
+    //same again with pRefBtn, except stop if there's a
+    //shared parent in the existing widgets
+    for (vcl::Window *pCandidate = pRefBtn;
+        pCandidate && (pCandidate != pContentArea && pCandidate->IsVisible());
+        pCandidate = pCandidate->GetWindow(GetWindowType::RealParent))
+    {
+        if (aVisibleWidgets.insert(pCandidate).second)
+            break;
+    }
+
+    //hide everything except the aVisibleWidgets
+    hideUnless(pContentArea, aVisibleWidgets, m_aHiddenWidgets);
+
+    pRefEdit->set_width_request(nOldEditWidth);
+    m_nOldBorderWidth = m_xDialog->get_border_width();
+    m_xDialog->set_border_width(0);
+    if (vcl::Window *pActionArea = m_xDialog->get_action_area())
+        pActionArea->Hide();
+    m_xDialog->setOptimalLayoutSize();
+    m_xRefEdit = pRefEdit;
+}
+
+void SalInstanceDialog::undo_collapse()
+{
+    // All others: Show();
+    for (VclPtr<vcl::Window> const & pWindow : m_aHiddenWidgets)
+    {
+        pWindow->Show();
+    }
+    m_aHiddenWidgets.clear();
+
+    m_xRefEdit->set_width_request(m_nOldEditWidthReq);
+    m_xRefEdit.clear();
+    m_xDialog->set_border_width(m_nOldBorderWidth);
+    if (vcl::Window *pActionArea = m_xDialog->get_action_area())
+        pActionArea->Show();
+    m_xDialog->setOptimalLayoutSize();
 }
 
 void SalInstanceDialog::SetInstallLOKNotifierHdl(const Link<void*, vcl::ILibreOfficeKitNotifier*>& rLink)

@@ -131,11 +131,13 @@ class SFX2_DLLPUBLIC SfxModelessDialogController : public SfxDialogController
 protected:
     SfxModelessDialogController(SfxBindings*, SfxChildWindow* pChildWin,
         weld::Window* pParent, const OUString& rUIXMLDescription, const OString& rID);
-    virtual ~SfxModelessDialogController() override;
 
 public:
     virtual void            FillInfo(SfxChildWinInfo&) const;
-    virtual void            Activate() {}
+    virtual void            Activate() override;
+    virtual void            Deactivate() override;
+    virtual ~SfxModelessDialogController() override;
+
     void                    Initialize (SfxChildWinInfo const * pInfo);
     void                    Close();
     void                    DeInit();
