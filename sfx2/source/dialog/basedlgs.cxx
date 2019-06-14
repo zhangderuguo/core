@@ -443,9 +443,12 @@ void SfxModelessDialogController::DeInit()
     If a ModelessDialog is enabled its ViewFrame will be activated.
     This is necessary by PluginInFrames.
 */
-IMPL_LINK_NOARG(SfxDialogController, FocusInHdl, weld::Widget&, void)
+IMPL_LINK_NOARG(SfxDialogController, FocusChangeHdl, weld::Widget&, void)
 {
-    Activate();
+    if (m_xDialog->has_toplevel_focus())
+        Activate();
+    else
+        DeActivate();
 }
 
 void SfxModelessDialogController::Activate()
@@ -454,11 +457,6 @@ void SfxModelessDialogController::Activate()
         return;
     m_pBindings->SetActiveFrame(m_xImpl->pMgr->GetFrame());
     m_xImpl->pMgr->Activate_Impl();
-}
-
-IMPL_LINK_NOARG(SfxDialogController, FocusOutHdl, weld::Widget&, void)
-{
-    DeActivate();
 }
 
 void SfxModelessDialogController::DeActivate()
@@ -484,6 +482,11 @@ void SfxDialogController::EndDialog()
     if (!m_xDialog->get_visible())
         return;
     response(RET_CLOSE);
+}
+
+bool SfxModelessDialogController::IsClosing() const
+{
+    return m_xImpl->bClosing;
 }
 
 void SfxModelessDialogController::EndDialog()
@@ -869,8 +872,7 @@ SfxDialogController::SfxDialogController(weld::Widget* pParent, const OUString& 
                                     && SfxViewShell::Current()->isLOKMobilePhone())
 {
     m_xDialog->SetInstallLOKNotifierHdl(LINK(this, SfxDialogController, InstallLOKNotifierHdl));
-    m_xDialog->connect_focus_in(LINK(this, SfxDialogController, FocusInHdl));
-    m_xDialog->connect_focus_out(LINK(this, SfxDialogController, FocusOutHdl));
+    m_xDialog->connect_toplevel_focus_changed(LINK(this, SfxDialogController, FocusChangeHdl));
 }
 
 IMPL_STATIC_LINK_NOARG(SfxDialogController, InstallLOKNotifierHdl, void*, vcl::ILibreOfficeKitNotifier*)

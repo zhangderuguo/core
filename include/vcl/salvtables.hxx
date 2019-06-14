@@ -121,6 +121,8 @@ public:
     virtual std::unique_ptr<weld::Menu> weld_menu(const OString& id,
                                                   bool bTakeOwnership = true) override;
 
+    virtual std::unique_ptr<weld::Toolbar> weld_toolbar(const OString& id, bool bTakeOwnership = false) override;
+
     virtual std::unique_ptr<weld::SizeGroup> create_size_group() override;
 
     OString get_current_page_help_id();

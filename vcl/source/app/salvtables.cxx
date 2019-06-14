@@ -576,9 +576,9 @@ SystemWindow* SalInstanceWidget::getSystemWindow()
 
 void SalInstanceWidget::HandleEventListener(VclWindowEvent& rEvent)
 {
-    if (rEvent.GetId() == VclEventId::WindowGetFocus || rEvent.GetId() == VclEventId::WindowActivate)
+    if (rEvent.GetId() == VclEventId::WindowGetFocus)
         m_aFocusInHdl.Call(*this);
-    else if (rEvent.GetId() == VclEventId::WindowLoseFocus || rEvent.GetId() == VclEventId::WindowDeactivate)
+    else if (rEvent.GetId() == VclEventId::WindowLoseFocus)
         m_aFocusOutHdl.Call(*this);
     else if (rEvent.GetId() == VclEventId::WindowResize)
         m_aSizeAllocateHdl.Call(m_xWidget->GetSizePixel());
@@ -603,6 +603,8 @@ namespace
 {
     Image createImage(const OUString& rImage)
     {
+        if (rImage.isEmpty())
+            return Image();
         if (rImage.lastIndexOf('.') != rImage.getLength() - 4)
         {
             assert((rImage == "dialog-warning" || rImage == "dialog-error" || rImage == "dialog-information") && "unknown stock image");
@@ -679,12 +681,301 @@ public:
         insert_to_menu(m_xMenu, pos, rId, rStr, pIconName, pImageSurface, bCheck);
     }
 
+    PopupMenu* getMenu() const { return m_xMenu.get(); }
+
     virtual ~SalInstanceMenu() override
     {
         if (m_bTakeOwnership)
             m_xMenu.disposeAndClear();
     }
 };
+
+namespace
+{
+class SalInstanceToolbar : public SalInstanceWidget, public virtual weld::Toolbar
+{
+private:
+    VclPtr<ToolBox> m_xToolBox;
+    std::map<sal_uInt16, VclPtr<vcl::Window>> m_aFloats;
+    std::map<sal_uInt16, VclPtr<PopupMenu>> m_aMenus;
+
+    OString m_sStartShowIdent;
+
+    DECL_LINK(ClickHdl, ToolBox*, void);
+    DECL_LINK(DropdownClick, ToolBox*, void);
+    DECL_LINK(MenuToggleListener, VclWindowEvent&, void);
+
+public:
+    SalInstanceToolbar(ToolBox* pToolBox, SalInstanceBuilder* pBuilder, bool bTakeOwnership)
+        : SalInstanceWidget(pToolBox, pBuilder, bTakeOwnership)
+        , m_xToolBox(pToolBox)
+    {
+        m_xToolBox->SetSelectHdl(LINK(this, SalInstanceToolbar, ClickHdl));
+        m_xToolBox->SetDropdownClickHdl(LINK(this, SalInstanceToolbar, DropdownClick));
+    }
+
+    virtual void set_item_sensitive(const OString& rIdent, bool bSensitive) override
+    {
+        m_xToolBox->EnableItem(m_xToolBox->GetItemId(OUString::fromUtf8(rIdent)), bSensitive);
+    }
+
+    virtual bool get_item_sensitive(const OString& rIdent) const override
+    {
+        return m_xToolBox->IsItemEnabled(m_xToolBox->GetItemId(OUString::fromUtf8(rIdent)));
+    }
+
+    virtual void set_item_visible(const OString& rIdent, bool bVisible) override
+    {
+        m_xToolBox->ShowItem(m_xToolBox->GetItemId(OUString::fromUtf8(rIdent)), bVisible);
+    }
+
+    virtual void set_item_help_id(const OString& rIdent, const OString& rHelpId) override
+    {
+        m_xToolBox->SetHelpId(m_xToolBox->GetItemId(OUString::fromUtf8(rIdent)), rHelpId);
+    }
+
+    virtual bool get_item_visible(const OString& rIdent) const override
+    {
+        return m_xToolBox->IsItemVisible(m_xToolBox->GetItemId(OUString::fromUtf8(rIdent)));
+    }
+
+    virtual void set_item_active(const OString& rIdent, bool bActive) override
+    {
+        sal_uInt16 nItemId = m_xToolBox->GetItemId(OUString::fromUtf8(rIdent));
+        m_xToolBox->CheckItem(nItemId, bActive);
+    }
+
+    virtual bool get_item_active(const OString& rIdent) const override
+    {
+        return m_xToolBox->IsItemChecked(m_xToolBox->GetItemId(OUString::fromUtf8(rIdent)));
+    }
+
+    void set_menu_item_active(const OString& rIdent, bool bActive) override
+    {
+        sal_uInt16 nItemId = m_xToolBox->GetItemId(OUString::fromUtf8(rIdent));
+        assert(m_xToolBox->GetItemBits(nItemId) & ToolBoxItemBits::DROPDOWN);
+
+        if (bActive)
+        {
+            m_sStartShowIdent = m_xToolBox->GetItemCommand(nItemId).toUtf8();
+            signal_toggle_menu(m_sStartShowIdent);
+        }
+
+        auto pFloat = m_aFloats[nItemId];
+        if (pFloat)
+        {
+            if (bActive)
+                vcl::Window::GetDockingManager()->StartPopupMode(m_xToolBox, pFloat,
+                                                                 FloatWinPopupFlags::GrabFocus);
+            else
+                vcl::Window::GetDockingManager()->EndPopupMode(pFloat);
+        }
+        auto pPopup = m_aMenus[nItemId];
+        if (pPopup)
+        {
+            if (bActive)
+            {
+                tools::Rectangle aRect = m_xToolBox->GetItemRect(nItemId);
+                pPopup->Execute(m_xToolBox, aRect, PopupMenuFlags::ExecuteDown);
+            }
+            else
+                pPopup->EndExecute();
+        }
+
+        m_sStartShowIdent.clear();
+    }
+
+    bool get_menu_item_active(const OString& rIdent) const override
+    {
+        sal_uInt16 nItemId = m_xToolBox->GetItemId(OUString::fromUtf8(rIdent));
+        assert(m_xToolBox->GetItemBits(nItemId) & ToolBoxItemBits::DROPDOWN);
+
+        if (rIdent == m_sStartShowIdent)
+            return true;
+
+        auto aFloat = m_aFloats.find(nItemId);
+        if (aFloat != m_aFloats.end())
+        {
+            return vcl::Window::GetDockingManager()->IsInPopupMode(aFloat->second);
+        }
+
+        auto aPopup = m_aMenus.find(nItemId);
+        if (aPopup != m_aMenus.end())
+        {
+            return PopupMenu::GetActivePopupMenu() == aPopup->second;
+        }
+
+        return false;
+    }
+
+    virtual void set_item_popover(const OString& rIdent, weld::Widget* pPopover) override
+    {
+        SalInstanceWidget* pPopoverWidget = dynamic_cast<SalInstanceWidget*>(pPopover);
+
+        vcl::Window* pFloat = pPopoverWidget ? pPopoverWidget->getWidget() : nullptr;
+        if (pFloat)
+        {
+            pFloat->AddEventListener(LINK(this, SalInstanceToolbar, MenuToggleListener));
+            pFloat->EnableDocking();
+        }
+
+        sal_uInt16 nId = m_xToolBox->GetItemId(OUString::fromUtf8(rIdent));
+        auto xOldFloat = m_aFloats[nId];
+        if (xOldFloat)
+        {
+            xOldFloat->RemoveEventListener(LINK(this, SalInstanceToolbar, MenuToggleListener));
+        }
+        m_aFloats[nId] = pFloat;
+        m_aMenus[nId] = nullptr;
+    }
+
+    virtual void set_item_menu(const OString& rIdent, weld::Menu* pMenu) override
+    {
+        SalInstanceMenu* pInstanceMenu = dynamic_cast<SalInstanceMenu*>(pMenu);
+
+        PopupMenu* pPopup = pInstanceMenu ? pInstanceMenu->getMenu() : nullptr;
+
+        sal_uInt16 nId = m_xToolBox->GetItemId(OUString::fromUtf8(rIdent));
+        m_aMenus[nId] = pPopup;
+        m_aFloats[nId] = nullptr;
+    }
+
+    virtual void insert_separator(int pos, const OUString& /*rId*/) override
+    {
+        auto nInsertPos = pos == -1 ? ToolBox::APPEND : pos;
+        m_xToolBox->InsertSeparator(nInsertPos, 5);
+    }
+
+    virtual int get_n_items() const override { return m_xToolBox->GetItemCount(); }
+
+    virtual OString get_item_ident(int nIndex) const override
+    {
+        return m_xToolBox->GetItemCommand(m_xToolBox->GetItemId(nIndex)).toUtf8();
+    }
+
+    virtual void set_item_ident(int nIndex, const OString& rIdent) override
+    {
+        return m_xToolBox->SetItemCommand(m_xToolBox->GetItemId(nIndex),
+                                          OUString::fromUtf8(rIdent));
+    }
+
+    virtual void set_item_label(int nIndex, const OUString& rLabel) override
+    {
+        m_xToolBox->SetItemText(m_xToolBox->GetItemId(nIndex), rLabel);
+    }
+
+    virtual OUString get_item_label(const OString& rIdent) const override
+    {
+        return m_xToolBox->GetItemText(m_xToolBox->GetItemId(OUString::fromUtf8(rIdent)));
+    }
+
+    virtual void set_item_label(const OString& rIdent, const OUString& rLabel) override
+    {
+        m_xToolBox->SetItemText(m_xToolBox->GetItemId(OUString::fromUtf8(rIdent)), rLabel);
+    }
+
+    virtual void set_item_icon_name(const OString& rIdent, const OUString& rIconName) override
+    {
+        m_xToolBox->SetItemImage(m_xToolBox->GetItemId(OUString::fromUtf8(rIdent)),
+                                 Image(StockImage::Yes, rIconName));
+    }
+
+    virtual void set_item_image(const OString& rIdent,
+                                const css::uno::Reference<css::graphic::XGraphic>& rIcon) override
+    {
+        m_xToolBox->SetItemImage(m_xToolBox->GetItemId(OUString::fromUtf8(rIdent)), Image(rIcon));
+    }
+
+    virtual void set_item_image(const OString& rIdent, VirtualDevice* pDevice) override
+    {
+        if (pDevice)
+            m_xToolBox->SetItemImage(m_xToolBox->GetItemId(OUString::fromUtf8(rIdent)),
+                                     createImage(*pDevice));
+        else
+            m_xToolBox->SetItemImage(m_xToolBox->GetItemId(OUString::fromUtf8(rIdent)), Image());
+    }
+
+    virtual void set_item_image(int nIndex,
+                                const css::uno::Reference<css::graphic::XGraphic>& rIcon) override
+    {
+        m_xToolBox->SetItemImage(m_xToolBox->GetItemId(nIndex), Image(rIcon));
+    }
+
+    virtual void set_item_tooltip_text(int nIndex, const OUString& rTip) override
+    {
+        m_xToolBox->SetQuickHelpText(m_xToolBox->GetItemId(nIndex), rTip);
+    }
+
+    virtual void set_item_tooltip_text(const OString& rIdent, const OUString& rTip) override
+    {
+        m_xToolBox->SetQuickHelpText(m_xToolBox->GetItemId(OUString::fromUtf8(rIdent)), rTip);
+    }
+
+    virtual OUString get_item_tooltip_text(const OString& rIdent) const override
+    {
+        return m_xToolBox->GetQuickHelpText(m_xToolBox->GetItemId(OUString::fromUtf8(rIdent)));
+    }
+
+    virtual vcl::ImageType get_icon_size() const override { return m_xToolBox->GetImageSize(); }
+
+    virtual void set_icon_size(vcl::ImageType eType) override
+    {
+        ToolBoxButtonSize eButtonSize = ToolBoxButtonSize::DontCare;
+        switch (eType)
+        {
+            case vcl::ImageType::Size16:
+                eButtonSize = ToolBoxButtonSize::Small;
+                break;
+            case vcl::ImageType::Size26:
+                eButtonSize = ToolBoxButtonSize::Large;
+                break;
+            case vcl::ImageType::Size32:
+                eButtonSize = ToolBoxButtonSize::Size32;
+                break;
+        }
+        if (m_xToolBox->GetToolboxButtonSize() != eButtonSize)
+        {
+            m_xToolBox->SetToolboxButtonSize(eButtonSize);
+            m_xToolBox->queue_resize();
+        }
+    }
+
+    virtual ~SalInstanceToolbar() override
+    {
+        m_xToolBox->SetDropdownClickHdl(Link<ToolBox*, void>());
+        m_xToolBox->SetSelectHdl(Link<ToolBox*, void>());
+    }
+};
+
+}
+
+IMPL_LINK_NOARG(SalInstanceToolbar, ClickHdl, ToolBox*, void)
+{
+    sal_uInt16 nItemId = m_xToolBox->GetCurItemId();
+    signal_clicked(m_xToolBox->GetItemCommand(nItemId).toUtf8());
+}
+
+IMPL_LINK_NOARG(SalInstanceToolbar, DropdownClick, ToolBox*, void)
+{
+    sal_uInt16 nItemId = m_xToolBox->GetCurItemId();
+    set_menu_item_active(m_xToolBox->GetItemCommand(nItemId).toUtf8(), true);
+}
+
+IMPL_LINK(SalInstanceToolbar, MenuToggleListener, VclWindowEvent&, rEvent, void)
+{
+    if (rEvent.GetId() == VclEventId::WindowEndPopupMode)
+    {
+        for (auto& rFloat : m_aFloats)
+        {
+            if (rEvent.GetWindow() == rFloat.second)
+            {
+                sal_uInt16 nItemId = rFloat.first;
+                signal_toggle_menu(m_xToolBox->GetItemCommand(nItemId).toUtf8());
+                break;
+            }
+        }
+    }
+}
 
 class SalInstanceSizeGroup : public weld::SizeGroup
 {
@@ -1357,6 +1648,10 @@ public:
     {
         m_xMenuButton->SetActivateHdl(LINK(this, SalInstanceMenuButton, ActivateHdl));
         m_xMenuButton->SetSelectHdl(LINK(this, SalInstanceMenuButton, MenuSelectHdl));
+        if (PopupMenu* pMenu = m_xMenuButton->GetPopupMenu())
+        {
+            pMenu->SetMenuFlags(MenuFlags::NoAutoMnemonics);
+        }
     }
 
     virtual void set_active(bool active) override
@@ -1390,10 +1685,28 @@ public:
         insert_to_menu(m_xMenuButton->GetPopupMenu(), pos, rId, rStr, pIconName, pImageSurface, bCheck);
     }
 
+    virtual void insert_separator(int pos, const OUString& rId) override
+    {
+        auto nInsertPos = pos == -1 ? MENU_APPEND : pos;
+        m_xMenuButton->GetPopupMenu()->InsertSeparator(rId.toUtf8(), nInsertPos);
+    }
+
     virtual void set_item_sensitive(const OString& rIdent, bool bSensitive) override
     {
         PopupMenu* pMenu = m_xMenuButton->GetPopupMenu();
         pMenu->EnableItem(rIdent, bSensitive);
+    }
+
+    virtual void remove_item(const OString& rId) override
+    {
+        PopupMenu* pMenu = m_xMenuButton->GetPopupMenu();
+        pMenu->RemoveItem(pMenu->GetItemPos(pMenu->GetItemId(rId)));
+    }
+
+    virtual void clear() override
+    {
+        PopupMenu* pMenu = m_xMenuButton->GetPopupMenu();
+        pMenu->Clear();
     }
 
     virtual void set_item_active(const OString& rIdent, bool bActive) override
@@ -1406,6 +1719,18 @@ public:
     {
         PopupMenu* pMenu = m_xMenuButton->GetPopupMenu();
         pMenu->SetItemText(pMenu->GetItemId(rIdent), rText);
+    }
+
+    virtual OUString get_item_label(const OString& rIdent) const override
+    {
+        PopupMenu* pMenu = m_xMenuButton->GetPopupMenu();
+        return pMenu->GetItemText(pMenu->GetItemId(rIdent));
+    }
+
+    virtual void set_item_visible(const OString& rIdent, bool bShow)
+    {
+        PopupMenu* pMenu = m_xMenuButton->GetPopupMenu();
+        pMenu->ShowItem(pMenu->GetItemId(rIdent), bShow);
     }
 
     virtual void set_item_help_id(const OString& rIdent, const OString& rHelpId) override
@@ -2963,9 +3288,9 @@ public:
         weld::Widget::connect_key_release(rLink);
     }
 
-    virtual void set_text_cursor() override
+    virtual void set_cursor(PointerStyle ePointerStyle) override
     {
-        m_xDrawingArea->SetPointer(PointerStyle::Text);
+        m_xDrawingArea->SetPointer(ePointerStyle);
     }
 
     virtual a11yref get_accessible_parent() override
@@ -3599,6 +3924,14 @@ std::unique_ptr<weld::Menu> SalInstanceBuilder::weld_menu(const OString &id, boo
 {
     PopupMenu* pMenu = m_xBuilder->get_menu(id);
     return pMenu ? o3tl::make_unique<SalInstanceMenu>(pMenu, bTakeOwnership) : nullptr;
+}
+
+std::unique_ptr<weld::Toolbar> SalInstanceBuilder::weld_toolbar(const OString& id,
+                                                                bool bTakeOwnership)
+{
+    ToolBox* pToolBox = m_xBuilder->get<ToolBox>(id);
+    return pToolBox ? std::make_unique<SalInstanceToolbar>(pToolBox, this, bTakeOwnership)
+                    : nullptr;
 }
 
 std::unique_ptr<weld::SizeGroup> SalInstanceBuilder::create_size_group()

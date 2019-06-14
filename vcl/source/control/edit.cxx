@@ -1463,7 +1463,7 @@ bool Edit::ImplHandleKeyEvent( const KeyEvent& rKEvt )
             if ( pImplFncGetSpecialChars )
             {
                 Selection aSaveSel = GetSelection(); // if someone changes the selection in Get/LoseFocus, e.g. URL bar
-                OUString aChars = pImplFncGetSpecialChars( this, GetFont() );
+                OUString aChars = pImplFncGetSpecialChars( GetFrameWeld(), GetFont() );
                 SetSelection( aSaveSel );
                 if ( !aChars.isEmpty() )
                 {
@@ -2024,7 +2024,7 @@ void Edit::Command( const CommandEvent& rCEvt )
         }
         else if (sCommand == "specialchar" && pImplFncGetSpecialChars)
         {
-            OUString aChars = pImplFncGetSpecialChars( this, GetFont() );
+            OUString aChars = pImplFncGetSpecialChars(GetFrameWeld(), GetFont());
             SetSelection( aSaveSel );
             if (!aChars.isEmpty())
             {

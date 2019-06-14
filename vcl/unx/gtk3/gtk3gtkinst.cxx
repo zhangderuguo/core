@@ -43,6 +43,7 @@
 #include <vcl/mnemonic.hxx>
 #include <vcl/syswin.hxx>
 #include <vcl/weld.hxx>
+#include <vcl/pngwrite.hxx>
 #include <window.h>
 #include <numeric>
 
@@ -1832,6 +1833,30 @@ namespace
 
 namespace
 {
+    GdkPixbuf* load_icon_from_stream(SvMemoryStream& rStream, const OString& image_type)
+    {
+        // if we know the image type, it's a little faster to hand the type over and skip the type
+        // detection.
+        GdkPixbufLoader *pixbuf_loader = gdk_pixbuf_loader_new_with_type(image_type.getStr(), nullptr);
+        gdk_pixbuf_loader_write(pixbuf_loader, static_cast<const guchar*>(rStream.GetData()),
+                                rStream.TellEnd(), nullptr);
+        gdk_pixbuf_loader_close(pixbuf_loader, nullptr);
+        GdkPixbuf* pixbuf = gdk_pixbuf_loader_get_pixbuf(pixbuf_loader);
+        if (pixbuf)
+            g_object_ref(pixbuf);
+        g_object_unref(pixbuf_loader);
+        return pixbuf;
+    }
+
+    GdkPixbuf* load_icon_by_name_theme_lang(const OUString& rIconName, const OUString& rIconTheme, const OUString& rUILang)
+    {
+        auto xMemStm = ImageTree::get().getImageStream(rIconName, rIconTheme, rUILang);
+        if (!xMemStm)
+            return nullptr;
+        OUString sImageType = rIconName.copy(rIconName.lastIndexOf('.')+1).toAsciiLowerCase();
+        return load_icon_from_stream(*xMemStm, sImageType.toUtf8());
+    }
+
     GdkPixbuf* load_icon_by_name(const OUString& rIconName, const OUString& rIconTheme, const OUString& rUILang)
     {
         GdkPixbuf* pixbuf = nullptr;
@@ -1969,7 +1994,7 @@ public:
                      bool bCheck)
     {
         GtkWidget* pImage = nullptr;
-        if (pIconName)
+        if (pIconName && !pIconName->isEmpty())
         {
             GdkPixbuf* pixbuf = load_icon_by_name(*pIconName);
             if (!pixbuf)
@@ -2005,6 +2030,24 @@ public:
             gtk_menu_reorder_child(m_pMenu, pItem, pos);
     }
 
+    void insert_separator(int pos, const OUString& rId)
+    {
+        GtkWidget* pItem = gtk_separator_menu_item_new();
+        gtk_buildable_set_name(GTK_BUILDABLE(pItem), OUStringToOString(rId, RTL_TEXTENCODING_UTF8).getStr());
+        gtk_menu_shell_append(GTK_MENU_SHELL(m_pMenu), pItem);
+        gtk_widget_show(pItem);
+        add_to_map(GTK_MENU_ITEM(pItem));
+        if (pos != -1)
+            gtk_menu_reorder_child(m_pMenu, pItem, pos);
+    }
+
+    void remove_item(const OString& rIdent)
+    {
+        GtkMenuItem* pMenuItem = m_aMap[rIdent];
+        remove_from_map(pMenuItem);
+        gtk_widget_destroy(GTK_WIDGET(pMenuItem));
+    }
+
     void set_item_sensitive(const OString& rIdent, bool bSensitive)
     {
         gtk_widget_set_sensitive(GTK_WIDGET(m_aMap[rIdent]), bSensitive);
@@ -2020,6 +2063,12 @@ public:
     void set_item_label(const OString& rIdent, const OUString& rText)
     {
         gtk_menu_item_set_label(m_aMap[rIdent], MapToGtkAccelerator(rText).getStr());
+    }
+
+    OUString get_item_label(const OString& rIdent) const
+    {
+        const gchar* pText = gtk_menu_item_get_label(m_aMap.find(rIdent)->second);
+        return OUString(pText, pText ? strlen(pText) : 0, RTL_TEXTENCODING_UTF8);
     }
 
     void set_item_help_id(const OString& rIdent, const OString& rHelpId)
@@ -2039,6 +2088,31 @@ public:
             gtk_widget_show(pWidget);
         else
             gtk_widget_hide(pWidget);
+    }
+
+    void set_item_visible(const OString& rIdent, bool bShow)
+    {
+        GtkWidget* pWidget = GTK_WIDGET(m_aMap[rIdent]);
+        if (bShow)
+            gtk_widget_show(pWidget);
+        else
+            gtk_widget_hide(pWidget);
+    }
+
+    void clear_items()
+    {
+        for (const auto& a : m_aMap)
+        {
+            GtkMenuItem* pMenuItem = a.second;
+            g_signal_handlers_disconnect_by_data(pMenuItem, this);
+            gtk_widget_destroy(GTK_WIDGET(pMenuItem));
+        }
+        m_aMap.clear();
+    }
+
+    GtkMenu* getMenu() const
+    {
+        return m_pMenu;
     }
 
     virtual ~MenuHelper()
@@ -2146,18 +2220,27 @@ class GtkInstanceWindow : public GtkInstanceContainer, public virtual weld::Wind
 private:
     GtkWindow* m_pWindow;
     rtl::Reference<SalGtkXWindow> m_xWindow; //uno api
+    gulong m_nToplevelFocusChangedSignalId;
 
     static void help_pressed(GtkAccelGroup*, GObject*, guint, GdkModifierType, gpointer widget)
     {
         GtkInstanceWindow* pThis = static_cast<GtkInstanceWindow*>(widget);
         pThis->help();
     }
+
+    static void signalToplevelFocusChanged(GtkWindow*, GParamSpec*, gpointer widget)
+    {
+        GtkInstanceWindow* pThis = static_cast<GtkInstanceWindow*>(widget);
+        pThis->signal_toplevel_focus_changed();
+    }
+
 protected:
     void help();
 public:
     GtkInstanceWindow(GtkWindow* pWindow, GtkInstanceBuilder* pBuilder, bool bTakeOwnership)
         : GtkInstanceContainer(GTK_CONTAINER(pWindow), pBuilder, bTakeOwnership)
         , m_pWindow(pWindow)
+        , m_nToplevelFocusChangedSignalId(0)
     {
         //hook up F1 to show help
         GtkAccelGroup *pGroup = gtk_accel_group_new();
@@ -2300,8 +2383,31 @@ public:
         return ImplWindowStateToStr(aData);
     }
 
+    virtual void connect_toplevel_focus_changed(const Link<weld::Widget&, void>& rLink) override
+    {
+        assert(!m_nToplevelFocusChangedSignalId);
+        m_nToplevelFocusChangedSignalId = g_signal_connect(m_pWindow, "notify::has-toplevel-focus", G_CALLBACK(signalToplevelFocusChanged), this);
+        weld::Window::connect_toplevel_focus_changed(rLink);
+    }
+
+    virtual void disable_notify_events() override
+    {
+        if (m_nToplevelFocusChangedSignalId)
+            g_signal_handler_block(m_pWidget, m_nToplevelFocusChangedSignalId);
+        GtkInstanceContainer::disable_notify_events();
+    }
+
+    virtual void enable_notify_events() override
+    {
+        GtkInstanceContainer::enable_notify_events();
+        if (m_nToplevelFocusChangedSignalId)
+            g_signal_handler_unblock(m_pWidget, m_nToplevelFocusChangedSignalId);
+    }
+
     virtual ~GtkInstanceWindow() override
     {
+        if (m_nToplevelFocusChangedSignalId)
+            g_signal_handler_disconnect(m_pWindow, m_nToplevelFocusChangedSignalId);
         if (m_xWindow.is())
             m_xWindow->clear();
     }
@@ -4350,6 +4456,21 @@ public:
         MenuHelper::insert_item(pos, rId, rStr, pIconName, pImageSurface, bCheck);
     }
 
+    virtual void insert_separator(int pos, const OUString& rId) override
+    {
+        MenuHelper::insert_separator(pos, rId);
+    }
+
+    virtual void remove_item(const OString& rId) override
+    {
+        MenuHelper::remove_item(rId);
+    }
+
+    virtual void clear() override
+    {
+        clear_items();
+    }
+
     virtual void set_item_active(const OString& rIdent, bool bActive) override
     {
         MenuHelper::set_item_active(rIdent, bActive);
@@ -4363,6 +4484,16 @@ public:
     virtual void set_item_label(const OString& rIdent, const OUString& rLabel) override
     {
         MenuHelper::set_item_label(rIdent, rLabel);
+    }
+
+    virtual OUString get_item_label(const OString& rIdent) const override
+    {
+        return MenuHelper::get_item_label(rIdent);
+    }
+
+    virtual void set_item_visible(const OString& rIdent, bool bVisible)
+    {
+        MenuHelper::set_item_visible(rIdent, bVisible);
     }
 
     virtual void set_item_help_id(const OString& rIdent, const OString& rHelpId) override
@@ -4417,6 +4548,8 @@ public:
                 gtk_widget_show_all(m_pPopover);
         }
     }
+
+    void set_menu(weld::Menu* pMenu);
 
     virtual ~GtkInstanceMenuButton() override
     {
@@ -4607,6 +4740,61 @@ public:
         }
     }
 };
+
+namespace {
+    vcl::ImageType GtkToVcl(GtkIconSize eSize)
+    {
+        vcl::ImageType eRet;
+        switch (eSize)
+        {
+            case GTK_ICON_SIZE_MENU:
+            case GTK_ICON_SIZE_SMALL_TOOLBAR:
+            case GTK_ICON_SIZE_BUTTON:
+                eRet = vcl::ImageType::Size16;
+                break;
+            case GTK_ICON_SIZE_LARGE_TOOLBAR:
+                eRet = vcl::ImageType::Size26;
+                break;
+            case GTK_ICON_SIZE_DND:
+            case GTK_ICON_SIZE_DIALOG:
+                eRet = vcl::ImageType::Size32;
+                break;
+            default:
+            case GTK_ICON_SIZE_INVALID:
+                eRet = vcl::ImageType::Small;
+                break;
+        }
+        return eRet;
+    }
+
+    GtkIconSize VclToGtk(vcl::ImageType eSize)
+    {
+        GtkIconSize eRet;
+        switch (eSize)
+        {
+            case vcl::ImageType::Size16:
+                eRet = GTK_ICON_SIZE_SMALL_TOOLBAR;
+                break;
+            case vcl::ImageType::Size26:
+                eRet = GTK_ICON_SIZE_LARGE_TOOLBAR;
+                break;
+            case vcl::ImageType::Size32:
+                eRet = GTK_ICON_SIZE_DIALOG;
+                break;
+            default:
+                GTK_ICON_SIZE_INVALID;
+        }
+        return eRet;
+    }
+}
+
+void GtkInstanceMenuButton::set_menu(weld::Menu* pMenu)
+{
+    GtkInstanceMenu* pPopoverWidget = dynamic_cast<GtkInstanceMenu*>(pMenu);
+    m_pPopover = nullptr;
+    GtkWidget* pMenuWidget = GTK_WIDGET(pPopoverWidget ? pPopoverWidget->getMenu() : nullptr);
+    gtk_menu_button_set_popup(m_pMenuButton, pMenuWidget);
+}
 
 class GtkInstanceLinkButton : public GtkInstanceContainer, public virtual weld::LinkButton
 {
@@ -5148,6 +5336,27 @@ namespace
                 cairo_surface_destroy(target);
             }
         }
+    }
+
+    GdkPixbuf* getPixbuf(const css::uno::Reference<css::graphic::XGraphic>& rImage)
+    {
+        Image aImage(rImage);
+
+        OUString sStock(aImage.GetStock());
+        if (!sStock.isEmpty())
+            return load_icon_by_name(sStock);
+
+        std::unique_ptr<SvMemoryStream> xMemStm(new SvMemoryStream);
+
+        css::uno::Sequence<css::beans::PropertyValue> aFilterData(1);
+        aFilterData[0].Name = "Compression";
+        // We "know" that this gets passed to zlib's deflateInit2_(). 1 means best speed.
+        aFilterData[0].Value <<= sal_Int32(1);
+
+        vcl::PNGWriter aWriter(aImage.GetBitmapEx(), &aFilterData);
+        aWriter.Write(*xMemStm);
+
+        return load_icon_from_stream(*xMemStm, "png");
     }
 
     GdkPixbuf* getPixbuf(const OUString& rIconName)
@@ -6601,6 +6810,7 @@ private:
         if (!gdk_cairo_get_clip_rectangle(cr, &rect))
             return;
         tools::Rectangle aRect(Point(rect.x, rect.y), Size(rect.width, rect.height));
+        aRect = m_xDevice->PixelToLogic(aRect);
         m_xDevice->Erase(aRect);
         m_aDrawHdl.Call(std::pair<vcl::RenderContext&, const tools::Rectangle&>(*m_xDevice, aRect));
         cairo_surface_mark_dirty(m_pSurface);
@@ -6799,9 +7009,12 @@ public:
         m_xDevice->EnableRTL(bRTL);
     }
 
-    virtual void set_text_cursor() override
+    virtual void set_cursor(PointerStyle ePointerStyle) override
     {
-        set_cursor(GTK_WIDGET(m_pDrawingArea), "text");
+        GdkCursor *pCursor = GtkSalFrame::getDisplay()->getCursor(ePointerStyle);
+        if (!gtk_widget_get_realized(GTK_WIDGET(m_pDrawingArea)))
+            gtk_widget_realize(GTK_WIDGET(m_pDrawingArea));
+        gdk_window_set_cursor(gtk_widget_get_window(GTK_WIDGET(m_pDrawingArea)), pCursor);
     }
 
     virtual void queue_draw() override
@@ -7997,6 +8210,390 @@ void ensure_intercept_drawing_area_accessibility()
 
 }
 
+namespace {
+
+class GtkInstanceToolbar : public GtkInstanceWidget, public virtual weld::Toolbar
+{
+private:
+    GtkToolbar* m_pToolbar;
+
+    std::map<OString, GtkToolButton*> m_aMap;
+    std::map<OString, std::unique_ptr<GtkInstanceMenuButton>> m_aMenuButtonMap;
+
+    // at the time of writing there is no gtk_menu_tool_button_set_popover available
+    // though there will be in the future
+    // https://gitlab.gnome.org/GNOME/gtk/commit/03e30431a8af9a947a0c4ccab545f24da16bfe17?w=1
+    static void find_menu_button(GtkWidget *pWidget, gpointer user_data)
+    {
+        if (g_strcmp0(gtk_widget_get_name(pWidget), "GtkMenuButton") == 0)
+        {
+            GtkWidget **ppToggleButton = static_cast<GtkWidget**>(user_data);
+            *ppToggleButton = pWidget;
+        }
+        else if (GTK_IS_CONTAINER(pWidget))
+            gtk_container_forall(GTK_CONTAINER(pWidget), find_menu_button, user_data);
+    }
+
+    static void find_menupeer_button(GtkWidget *pWidget, gpointer user_data)
+    {
+        if (g_strcmp0(gtk_widget_get_name(pWidget), "GtkButton") == 0)
+        {
+            GtkWidget **ppButton = static_cast<GtkWidget**>(user_data);
+            *ppButton = pWidget;
+        }
+        else if (GTK_IS_CONTAINER(pWidget))
+            gtk_container_forall(GTK_CONTAINER(pWidget), find_menupeer_button, user_data);
+    }
+
+    static void collect(GtkWidget* pItem, gpointer widget)
+    {
+        if (GTK_IS_TOOL_BUTTON(pItem))
+        {
+            GtkToolButton* pToolItem = GTK_TOOL_BUTTON(pItem);
+            GtkInstanceToolbar* pThis = static_cast<GtkInstanceToolbar*>(widget);
+
+            GtkMenuButton* pMenuButton = nullptr;
+            if (GTK_IS_MENU_TOOL_BUTTON(pItem))
+                find_menu_button(pItem, &pMenuButton);
+
+            pThis->add_to_map(pToolItem, pMenuButton);
+        }
+    }
+
+    void add_to_map(GtkToolButton* pToolItem, GtkMenuButton* pMenuButton)
+    {
+        const gchar* pStr = gtk_buildable_get_name(GTK_BUILDABLE(pToolItem));
+        OString id(pStr, pStr ? strlen(pStr) : 0);
+        m_aMap[id] = pToolItem;
+        if (pMenuButton)
+        {
+            m_aMenuButtonMap[id] = std::make_unique<GtkInstanceMenuButton>(pMenuButton, m_pBuilder, false);
+            // so that, e.g. with focus initially in writer main document then
+            // after clicking the heading menu in the writer navigator focus is
+            // left in the main document and not in the toolbar
+            gtk_button_set_focus_on_click(GTK_BUTTON(pMenuButton), false);
+            g_signal_connect(pMenuButton, "toggled", G_CALLBACK(signalItemToggled), this);
+        }
+        g_signal_connect(pToolItem, "clicked", G_CALLBACK(signalItemClicked), this);
+    }
+
+    static void signalItemClicked(GtkToolButton* pItem, gpointer widget)
+    {
+        GtkInstanceToolbar* pThis = static_cast<GtkInstanceToolbar*>(widget);
+        SolarMutexGuard aGuard;
+        pThis->signal_item_clicked(pItem);
+    }
+
+    void signal_item_clicked(GtkToolButton* pItem)
+    {
+        const gchar* pStr = gtk_buildable_get_name(GTK_BUILDABLE(pItem));
+        signal_clicked(OString(pStr, pStr ? strlen(pStr) : 0));
+    }
+
+    static void signalItemToggled(GtkToggleButton* pItem, gpointer widget)
+    {
+        GtkInstanceToolbar* pThis = static_cast<GtkInstanceToolbar*>(widget);
+        SolarMutexGuard aGuard;
+        pThis->signal_item_toggled(pItem);
+    }
+
+    void signal_item_toggled(GtkToggleButton* pItem)
+    {
+        for (auto& a : m_aMenuButtonMap)
+        {
+            if (a.second->getWidget() == GTK_WIDGET(pItem))
+            {
+                signal_toggle_menu(a.first);
+                break;
+            }
+        }
+    }
+
+    static void set_item_image(GtkToolButton* pItem, const css::uno::Reference<css::graphic::XGraphic>& rIcon)
+    {
+        GtkWidget* pImage = nullptr;
+
+        if (GdkPixbuf* pixbuf = getPixbuf(rIcon))
+        {
+            pImage = gtk_image_new_from_pixbuf(pixbuf);
+            g_object_unref(pixbuf);
+            gtk_widget_show(pImage);
+        }
+
+        gtk_tool_button_set_icon_widget(pItem, pImage);
+    }
+
+    void set_item_image(GtkToolButton* pItem, VirtualDevice* pDevice)
+    {
+        GtkWidget* pImage = nullptr;
+
+        if (pDevice)
+        {
+            pImage = image_new_from_virtual_device(*pDevice);
+            gtk_widget_show(pImage);
+        }
+
+        gtk_tool_button_set_icon_widget(pItem, pImage);
+        gtk_widget_queue_draw(GTK_WIDGET(m_pToolbar));
+    }
+
+public:
+    GtkInstanceToolbar(GtkToolbar* pToolbar, GtkInstanceBuilder* pBuilder, bool bTakeOwnership)
+        : GtkInstanceWidget(GTK_WIDGET(pToolbar), pBuilder, bTakeOwnership)
+        , m_pToolbar(pToolbar)
+    {
+        gtk_container_foreach(GTK_CONTAINER(pToolbar), collect, this);
+    }
+
+    void disable_item_notify_events()
+    {
+        for (auto& a : m_aMap)
+        {
+            g_signal_handlers_block_by_func(a.second, reinterpret_cast<void*>(signalItemClicked), this);
+        }
+    }
+
+    void enable_item_notify_events()
+    {
+        for (auto& a : m_aMap)
+        {
+            g_signal_handlers_unblock_by_func(a.second, reinterpret_cast<void*>(signalItemClicked), this);
+        }
+    }
+
+    virtual void set_item_sensitive(const OString& rIdent, bool bSensitive) override
+    {
+        disable_item_notify_events();
+        gtk_widget_set_sensitive(GTK_WIDGET(m_aMap[rIdent]), bSensitive);
+        enable_item_notify_events();
+    }
+
+    virtual bool get_item_sensitive(const OString& rIdent) const override
+    {
+        return gtk_widget_get_sensitive(GTK_WIDGET(m_aMap.find(rIdent)->second));
+    }
+
+    virtual void set_item_visible(const OString& rIdent, bool bVisible) override
+    {
+        disable_item_notify_events();
+        gtk_widget_set_visible(GTK_WIDGET(m_aMap[rIdent]), bVisible);
+        enable_item_notify_events();
+    }
+
+    virtual void set_item_help_id(const OString& rIdent, const OString& rHelpId) override
+    {
+        ::set_help_id(GTK_WIDGET(m_aMap[rIdent]), rHelpId);
+    }
+
+    virtual bool get_item_visible(const OString& rIdent) const override
+    {
+        return gtk_widget_get_visible(GTK_WIDGET(m_aMap.find(rIdent)->second));
+    }
+
+    virtual void set_item_active(const OString& rIdent, bool bActive) override
+    {
+        disable_item_notify_events();
+
+        GtkToolButton* pToolButton = m_aMap.find(rIdent)->second;
+
+        assert(GTK_IS_TOGGLE_TOOL_BUTTON(pToolButton) || GTK_IS_MENU_TOOL_BUTTON(pToolButton) || !bActive);
+        if (GTK_IS_MENU_TOOL_BUTTON(pToolButton))
+        {
+            GtkButton* pButton = nullptr;
+            // there is no GtkMenuToggleToolButton so abuse the CHECKED state of the GtkMenuToolButton button
+            // to emulate one
+            find_menupeer_button(GTK_WIDGET(pToolButton), &pButton);
+            if (pButton)
+            {
+                auto eState = gtk_widget_get_state_flags(GTK_WIDGET(pButton)) & ~GTK_STATE_FLAG_CHECKED;
+                if (bActive)
+                    eState |= GTK_STATE_FLAG_CHECKED;
+                gtk_widget_set_state_flags(GTK_WIDGET(pButton), static_cast<GtkStateFlags>(eState), true);
+            }
+        }
+        else if (GTK_IS_TOGGLE_TOOL_BUTTON(pToolButton))
+            gtk_toggle_tool_button_set_active(GTK_TOGGLE_TOOL_BUTTON(pToolButton), bActive);
+
+        enable_item_notify_events();
+    }
+
+    virtual bool get_item_active(const OString& rIdent) const override
+    {
+        GtkToolButton* pToolButton = m_aMap.find(rIdent)->second;
+
+        assert(GTK_IS_TOGGLE_TOOL_BUTTON(pToolButton) || GTK_IS_MENU_TOOL_BUTTON(pToolButton));
+        if (GTK_IS_MENU_TOOL_BUTTON(pToolButton))
+        {
+            GtkButton* pButton = nullptr;
+            // there is no GtkMenuToggleToolButton so abuse the CHECKED state of the GtkMenuToolButton button
+            // to emulate one
+            find_menupeer_button(GTK_WIDGET(pToolButton), &pButton);
+            if (pButton)
+            {
+                return gtk_widget_get_state_flags(GTK_WIDGET(pButton)) & GTK_STATE_FLAG_CHECKED;
+            }
+        }
+        else if (GTK_IS_TOGGLE_TOOL_BUTTON(pToolButton))
+            return gtk_toggle_tool_button_get_active(GTK_TOGGLE_TOOL_BUTTON(pToolButton));
+
+        return false;
+    }
+
+    virtual void set_menu_item_active(const OString& rIdent, bool bActive) override
+    {
+        disable_item_notify_events();
+
+        auto aFind = m_aMenuButtonMap.find(rIdent);
+        assert (aFind != m_aMenuButtonMap.end());
+        aFind->second->set_active(bActive);
+
+        enable_item_notify_events();
+    }
+
+    virtual bool get_menu_item_active(const OString& rIdent) const override
+    {
+        auto aFind = m_aMenuButtonMap.find(rIdent);
+        assert (aFind != m_aMenuButtonMap.end());
+        return aFind->second->get_active();
+    }
+
+    virtual void insert_separator(int pos, const OUString& rId) override
+    {
+        GtkToolItem* pItem = gtk_separator_tool_item_new();
+        gtk_buildable_set_name(GTK_BUILDABLE(pItem), OUStringToOString(rId, RTL_TEXTENCODING_UTF8).getStr());
+        gtk_toolbar_insert(m_pToolbar, pItem, pos);
+        gtk_widget_show(GTK_WIDGET(pItem));
+    }
+
+    virtual void set_item_popover(const OString& rIdent, weld::Widget* pPopover) override
+    {
+        m_aMenuButtonMap[rIdent]->set_popover(pPopover);
+    }
+
+    virtual void set_item_menu(const OString& rIdent, weld::Menu* pMenu) override
+    {
+        m_aMenuButtonMap[rIdent]->set_menu(pMenu);
+    }
+
+    virtual int get_n_items() const override
+    {
+        return gtk_toolbar_get_n_items(m_pToolbar);
+    }
+
+    virtual OString get_item_ident(int nIndex) const override
+    {
+        GtkToolItem* pItem = gtk_toolbar_get_nth_item(m_pToolbar, nIndex);
+        const gchar* pStr = gtk_buildable_get_name(GTK_BUILDABLE(pItem));
+        return OString(pStr, pStr ? strlen(pStr) : 0);
+    }
+
+    virtual void set_item_ident(int nIndex, const OString& rIdent) override
+    {
+        GtkToolItem* pItem = gtk_toolbar_get_nth_item(m_pToolbar, nIndex);
+        gtk_buildable_set_name(GTK_BUILDABLE(pItem), rIdent.getStr());
+    }
+
+    virtual void set_item_label(int nIndex, const OUString& rLabel) override
+    {
+        GtkToolItem* pItem = gtk_toolbar_get_nth_item(m_pToolbar, nIndex);
+        if (!GTK_IS_TOOL_BUTTON(pItem))
+            return;
+        gtk_tool_button_set_label(GTK_TOOL_BUTTON(pItem), MapToGtkAccelerator(rLabel).getStr());
+    }
+
+    virtual void set_item_label(const OString& rIdent, const OUString& rLabel) override
+    {
+        GtkToolButton* pItem = m_aMap[rIdent];
+        if (!pItem)
+            return;
+        gtk_tool_button_set_label(GTK_TOOL_BUTTON(pItem), MapToGtkAccelerator(rLabel).getStr());
+    }
+
+    OUString get_item_label(const OString& rIdent) const override
+    {
+        const gchar* pText = gtk_tool_button_get_label(m_aMap.find(rIdent)->second);
+        return OUString(pText, pText ? strlen(pText) : 0, RTL_TEXTENCODING_UTF8);
+    }
+
+    virtual void set_item_icon_name(const OString& rIdent, const OUString& rIconName) override
+    {
+        GtkToolButton* pItem = m_aMap[rIdent];
+        if (!pItem)
+            return;
+
+        GtkWidget* pImage = nullptr;
+
+        if (GdkPixbuf* pixbuf = getPixbuf(rIconName))
+        {
+            pImage = gtk_image_new_from_pixbuf(pixbuf);
+            g_object_unref(pixbuf);
+            gtk_widget_show(pImage);
+        }
+
+        gtk_tool_button_set_icon_widget(pItem, pImage);
+    }
+
+    virtual void set_item_image(const OString& rIdent, const css::uno::Reference<css::graphic::XGraphic>& rIcon) override
+    {
+        GtkToolButton* pItem = m_aMap[rIdent];
+        if (!pItem)
+            return;
+        set_item_image(pItem, rIcon);
+    }
+
+    virtual void set_item_image(const OString& rIdent, VirtualDevice* pDevice) override
+    {
+        GtkToolButton* pItem = m_aMap[rIdent];
+        if (!pItem)
+            return;
+        set_item_image(pItem, pDevice);
+    }
+
+    virtual void set_item_image(int nIndex, const css::uno::Reference<css::graphic::XGraphic>& rIcon) override
+    {
+        GtkToolItem* pItem = gtk_toolbar_get_nth_item(m_pToolbar, nIndex);
+        if (!GTK_IS_TOOL_BUTTON(pItem))
+            return;
+        set_item_image(GTK_TOOL_BUTTON(pItem), rIcon);
+    }
+
+    virtual void set_item_tooltip_text(int nIndex, const OUString& rTip) override
+    {
+        GtkToolItem* pItem = gtk_toolbar_get_nth_item(m_pToolbar, nIndex);
+        gtk_widget_set_tooltip_text(GTK_WIDGET(pItem), OUStringToOString(rTip, RTL_TEXTENCODING_UTF8).getStr());
+    }
+
+    virtual void set_item_tooltip_text(const OString& rIdent, const OUString& rTip) override
+    {
+        GtkToolButton* pItem = m_aMap[rIdent];
+        gtk_widget_set_tooltip_text(GTK_WIDGET(pItem), OUStringToOString(rTip, RTL_TEXTENCODING_UTF8).getStr());
+    }
+
+    virtual OUString get_item_tooltip_text(const OString& rIdent) const override
+    {
+        GtkToolButton* pItem = m_aMap.find(rIdent)->second;
+        const gchar* pStr = gtk_widget_get_tooltip_text(GTK_WIDGET(pItem));
+        return OUString(pStr, pStr ? strlen(pStr) : 0, RTL_TEXTENCODING_UTF8);
+    }
+
+    virtual vcl::ImageType get_icon_size() const override
+    {
+        return GtkToVcl(gtk_toolbar_get_icon_size(m_pToolbar));
+    }
+
+    virtual void set_icon_size(vcl::ImageType eType) override
+    {
+        return gtk_toolbar_set_icon_size(m_pToolbar, VclToGtk(eType));
+    }
+
+    virtual ~GtkInstanceToolbar() override
+    {
+        for (auto& a : m_aMap)
+            g_signal_handlers_disconnect_by_data(a.second, this);
+    }
+};
+}
+
 class GtkInstanceBuilder : public weld::Builder
 {
 private:
@@ -8040,6 +8637,31 @@ private:
                 }
             }
         }
+        else if (GTK_IS_TOOL_BUTTON(pWidget))
+        {
+            GtkToolButton* pToolButton = GTK_TOOL_BUTTON(pWidget);
+            const gchar* icon_name = gtk_tool_button_get_icon_name(pToolButton);
+            if (icon_name)
+            {
+                OUString aIconName(icon_name, strlen(icon_name), RTL_TEXTENCODING_UTF8);
+                GdkPixbuf* pixbuf = load_icon_by_name_theme_lang(aIconName, m_aIconTheme, m_aUILang);
+                if (pixbuf)
+                {
+                    GtkWidget* pImage = gtk_image_new_from_pixbuf(pixbuf);
+                    g_object_unref(pixbuf);
+                    gtk_tool_button_set_icon_widget(pToolButton, pImage);
+                    gtk_widget_show(pImage);
+                }
+            }
+
+            // if no tooltip reuse the label as default tooltip
+            if (!gtk_widget_get_tooltip_text(pWidget))
+            {
+                if (const gchar* label = gtk_tool_button_get_label(pToolButton))
+                    gtk_widget_set_tooltip_text(pWidget, label);
+            }
+        }
+
         //set helpids
         const gchar* pStr = gtk_buildable_get_name(GTK_BUILDABLE(pWidget));
         size_t nLen = pStr ? strlen(pStr) : 0;
@@ -8504,6 +9126,15 @@ public:
         if (!pMenu)
             return nullptr;
         return o3tl::make_unique<GtkInstanceMenu>(pMenu, bTakeOwnership);
+    }
+
+    virtual std::unique_ptr<weld::Toolbar> weld_toolbar(const OString &id, bool bTakeOwnership) override
+    {
+        GtkToolbar* pToolbar = GTK_TOOLBAR(gtk_builder_get_object(m_pBuilder, id.getStr()));
+        if (!pToolbar)
+            return nullptr;
+        auto_add_parentless_widgets_to_container(GTK_WIDGET(pToolbar));
+        return std::make_unique<GtkInstanceToolbar>(pToolbar, this, bTakeOwnership);
     }
 
     virtual std::unique_ptr<weld::SizeGroup> create_size_group() override

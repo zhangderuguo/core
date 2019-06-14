@@ -187,7 +187,9 @@ public:
     void remove_id(const LanguageType eLangType);
     void append(const LanguageType eLangType, const OUString& rStr);
     int find_text(const OUString& rStr) const { return m_xControl->find_text(rStr); }
-    const weld::ComboBox* get_widget() const { return m_xControl.get(); }
+    OUString get_text(int nPos) const { return m_xControl->get_text(nPos); }
+    int get_count() const { return m_xControl->get_count(); }
+    weld::ComboBox* get_widget() { return m_xControl.get(); }
 };
 
 class SVX_DLLPUBLIC SvxLanguageComboBox : public ComboBox, public SvxLanguageBoxBase

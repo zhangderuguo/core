@@ -33,9 +33,6 @@
     <glade-widget-class title="Thesaurus View" name="cuilo-ThesaurusAlternativesCtrl"
                         generic-name="ThesaurusAlternativesCtrl" parent="GtkTextView"
                         icon-name="widget-gtk-textview"/>
-    <glade-widget-class title="Spelling View" name="cuilo-SentenceEditWindow"
-                        generic-name="SentenceEditWindow" parent="GtkTextView"
-                        icon-name="widget-gtk-textview"/>
     <glade-widget-class title="Thesaurus Edit" name="cuilo-ReplaceEdit"
                         generic-name="ReplaceEdit" parent="GtkEntry"
                         icon-name="widget-gtk-textentry"/>

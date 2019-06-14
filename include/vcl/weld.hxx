@@ -18,8 +18,23 @@
 #include <vcl/vclenum.hxx>
 #include <vcl/virdev.hxx>
 #include <o3tl/make_unique.hxx>
+#include <vcl/image.hxx>
 
 #include <com/sun/star/accessibility/XAccessibleRelationSet.hpp>
+
+namespace com
+{
+namespace sun
+{
+namespace star
+{
+namespace graphic
+{
+class XGraphic;
+}
+}
+}
+}
 
 typedef css::uno::Reference<css::accessibility::XAccessible> a11yref;
 typedef css::uno::Reference<css::accessibility::XAccessibleRelationSet> a11yrelationset;
@@ -230,6 +245,9 @@ class VCL_DLLPUBLIC Window : virtual public Container
 {
 protected:
     Link<Widget&, bool> m_aHelpRequestHdl;
+    Link<Widget&, void> m_aTopLevelFocusChangedHdl;
+
+    void signal_toplevel_focus_changed() { m_aTopLevelFocusChangedHdl.Call(*this); }
 
 public:
     virtual void set_title(const OUString& rTitle) = 0;
@@ -248,6 +266,10 @@ public:
     virtual css::uno::Reference<css::awt::XWindow> GetXWindow() = 0;
 
     void connect_help(const Link<Widget&, bool>& rLink) { m_aHelpRequestHdl = rLink; }
+    virtual void connect_toplevel_focus_changed(const Link<Widget&, void>& rLink)
+    {
+        m_aTopLevelFocusChangedHdl = rLink;
+    }
 
     virtual SystemEnvData get_system_data() const = 0;
 
@@ -694,9 +716,14 @@ public:
     {
         insert_item(-1, rId, rStr, nullptr, &rImage, false);
     }
+    virtual void insert_separator(int pos, const OUString& rId) = 0;
+    void append_separator(const OUString& rId) { insert_separator(-1, rId); }
+    virtual void remove_item(const OString& rId) = 0;
+    virtual void clear() = 0;
     virtual void set_item_sensitive(const OString& rIdent, bool bSensitive) = 0;
     virtual void set_item_active(const OString& rIdent, bool bActive) = 0;
     virtual void set_item_label(const OString& rIdent, const OUString& rLabel) = 0;
+    virtual OUString get_item_label(const OString& rIdent) const = 0;
     virtual void set_item_help_id(const OString& rIdent, const OString& rHelpId) = 0;
     virtual OString get_item_help_id(const OString& rIdent) const = 0;
 
@@ -773,6 +800,7 @@ public:
     virtual void set_max_length(int nChars) = 0;
     // nEndPos can be -1 in order to select all text
     virtual void select_region(int nStartPos, int nEndPos) = 0;
+    // returns true if the selection has nonzero length
     virtual bool get_selection_bounds(int& rStartPos, int& rEndPos) = 0;
     virtual void replace_selection(const OUString& rText) = 0;
     virtual void set_position(int nCursorPos) = 0;
@@ -1308,7 +1336,7 @@ public:
     virtual void queue_draw_area(int x, int y, int width, int height) = 0;
     virtual void queue_resize() = 0;
 
-    virtual void set_text_cursor() = 0;
+    virtual void set_cursor(PointerStyle ePointerStyle) = 0;
 
     // use return here just to generate matching VirtualDevices
     virtual OutputDevice& get_ref_device() = 0;
@@ -1347,6 +1375,56 @@ public:
     }
 
     virtual ~Menu() {}
+};
+
+class VCL_DLLPUBLIC Toolbar : virtual public Widget
+{
+protected:
+    Link<const OString&, void> m_aClickHdl;
+    Link<const OString&, void> m_aToggleMenuHdl;
+
+    void signal_clicked(const OString& rIdent) { m_aClickHdl.Call(rIdent); }
+    void signal_toggle_menu(const OString& rIdent) { m_aToggleMenuHdl.Call(rIdent); }
+
+public:
+    virtual void set_item_sensitive(const OString& rIdent, bool bSensitive) = 0;
+    virtual bool get_item_sensitive(const OString& rIdent) const = 0;
+    virtual void set_item_active(const OString& rIdent, bool bActive) = 0;
+    virtual bool get_item_active(const OString& rIdent) const = 0;
+    virtual void set_menu_item_active(const OString& rIdent, bool bActive) = 0;
+    virtual bool get_menu_item_active(const OString& rIdent) const = 0;
+    virtual void set_item_menu(const OString& rIdent, weld::Menu* pMenu) = 0;
+    virtual void set_item_popover(const OString& rIdent, weld::Widget* pPopover) = 0;
+    virtual void set_item_visible(const OString& rIdent, bool bVisible) = 0;
+    virtual void set_item_help_id(const OString& rIdent, const OString& rHelpId) = 0;
+    virtual bool get_item_visible(const OString& rIdent) const = 0;
+    virtual void set_item_label(const OString& rIdent, const OUString& rLabel) = 0;
+    virtual OUString get_item_label(const OString& rIdent) const = 0;
+    virtual void set_item_tooltip_text(const OString& rIdent, const OUString& rTip) = 0;
+    virtual OUString get_item_tooltip_text(const OString& rIdent) const = 0;
+    virtual void set_item_icon_name(const OString& rIdent, const OUString& rIconName) = 0;
+    virtual void set_item_image(const OString& rIdent,
+                                const css::uno::Reference<css::graphic::XGraphic>& rIcon)
+        = 0;
+    virtual void set_item_image(const OString& rIdent, VirtualDevice* pDevice) = 0;
+
+    virtual void insert_separator(int pos, const OUString& rId) = 0;
+    void append_separator(const OUString& rId) { insert_separator(-1, rId); }
+
+    virtual int get_n_items() const = 0;
+    virtual OString get_item_ident(int nIndex) const = 0;
+    virtual void set_item_ident(int nIndex, const OString& rIdent) = 0;
+    virtual void set_item_label(int nIndex, const OUString& rLabel) = 0;
+    virtual void set_item_image(int nIndex,
+                                const css::uno::Reference<css::graphic::XGraphic>& rIcon)
+        = 0;
+    virtual void set_item_tooltip_text(int nIndex, const OUString& rTip) = 0;
+
+    virtual vcl::ImageType get_icon_size() const = 0;
+    virtual void set_icon_size(vcl::ImageType eType) = 0;
+
+    void connect_clicked(const Link<const OString&, void>& rLink) { m_aClickHdl = rLink; }
+    void connect_menu_toggled(const Link<const OString&, void>& rLink) { m_aToggleMenuHdl = rLink; }
 };
 
 class VCL_DLLPUBLIC SizeGroup
@@ -1437,6 +1515,7 @@ public:
                          const OString& treeviewid, bool bTakeOwnership = false)
         = 0;
     virtual std::unique_ptr<Menu> weld_menu(const OString& id, bool bTakeOwnership = true) = 0;
+    virtual std::unique_ptr<Toolbar> weld_toolbar(const OString& id, bool bTakeOwnership = false) = 0;
     virtual std::unique_ptr<SizeGroup> create_size_group() = 0;
     virtual ~Builder() {}
 };
