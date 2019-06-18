@@ -286,6 +286,8 @@ private:
         mbBroadcastLOKViewCursor = bSet;
     }
 
+    css::uno::Reference<css::datatransfer::clipboard::XClipboard> GetClipboard();
+
 protected:
 
     // DragAndDropClient
