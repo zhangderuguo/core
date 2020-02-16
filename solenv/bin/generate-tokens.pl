@@ -1,3 +1,4 @@
+#!/usr/bin/env perl
 #
 # This file is part of the LibreOffice project.
 #
