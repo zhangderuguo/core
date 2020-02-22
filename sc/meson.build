@@ -749,7 +749,7 @@ scui_lib = shared_library('scuilo',
     utl_lib,
     vcl_lib,
   ],
-  dependencies: [broken_mdds_dep],
+  dependencies: [mdds_dep],
   gnu_symbol_visibility: 'hidden',
   install: true,
 )
@@ -951,7 +951,7 @@ scfilt_lib = shared_library('scfilt',
     vcl_lib,
     i18nlangtag_lib,
   ],
-  dependencies: [orcus_dep, broken_mdds_dep],
+  dependencies: [orcus_dep, mdds_dep],
   install: true,
 )
 
@@ -1045,7 +1045,9 @@ vbaobj_lib = shared_library('vbaobjlo',
     vbahelper_lib,
     vcl_lib,
   ],
-  dependencies: [broken_mdds_dep],
+  dependencies: [
+    mdds_dep,
+  ],
   gnu_symbol_visibility: 'hidden',
   install: true,
 )
