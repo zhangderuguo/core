@@ -163,6 +163,10 @@ hyphen_dep = cpp.find_library('hyphen')
 mythes_dep = dependency('mythes')
 libexttextcat_dep = dependency('libexttextcat')
 
+qt5 = import('qt5')
+qt5_dep = dependency('qt5', modules: ['Core', 'Gui', 'Widgets'])
+qt5_x11_dep = dependency('qt5', modules: ['X11Extras'])
+
 # The version in Ubuntu eoan is too old.
 #mdds_dep = dependency('mdds-1.5')
 mdds_dep = declare_dependency(include_directories: 'mdds')
