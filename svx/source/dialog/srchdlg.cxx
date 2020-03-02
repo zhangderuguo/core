@@ -73,6 +73,8 @@
 #include <svx/svxdlg.hxx>
 #include <vcl/toolbox.hxx>
 #include <o3tl/typed_flags_set.hxx>
+#include <comphelper/lok.hxx>
+#include <sfx2/lokhelper.hxx>
 
 #include <cstdlib>
 #include <memory>
@@ -85,6 +87,8 @@ using namespace comphelper;
 
 
 #define REMEMBER_SIZE       10
+
+#define IS_MOBILE (comphelper::LibreOfficeKit::isActive() && SfxViewShell::Current() && SfxViewShell::Current()->isLOKMobilePhone())
 
 enum class ModifyFlags {
     NONE         = 0x000000,
@@ -257,7 +261,8 @@ void SearchAttrItemList::Remove(size_t nPos)
 
 SvxSearchDialog::SvxSearchDialog(weld::Window* pParent, SfxChildWindow* pChildWin, SfxBindings& rBind)
     : SfxModelessDialogController(&rBind, pChildWin, pParent,
-                                  "svx/ui/findreplacedialog.ui", "FindReplaceDialog")
+                                  IS_MOBILE ? OUString("svx/ui/findreplacedialog-mobile.ui") : OUString("svx/ui/findreplacedialog.ui"),
+                                  "FindReplaceDialog")
     , mbSuccess(false)
     , mbClosing(false)
     , rBindings(rBind)
