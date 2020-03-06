@@ -48,6 +48,11 @@
 #include <sfx2/viewfrm.hxx>
 #include <sfx2/childwin.hxx>
 #include <reffact.hxx>
+#include <comphelper/lok.hxx>
+#include <sfx2/lokhelper.hxx>
+
+
+#define IS_MOBILE (comphelper::LibreOfficeKit::isActive() && SfxViewShell::Current() && SfxViewShell::Current()->isLOKMobilePhone())
 
 /*  Position indexes for "Allow" list box.
     They do not map directly to ScValidationMode and can safely be modified to
@@ -688,7 +693,8 @@ IMPL_LINK_NOARG(ScTPValidationValue, CheckHdl, weld::Button&, void)
 // Input Help Page
 
 ScTPValidationHelp::ScTPValidationHelp(TabPageParent pParent, const SfxItemSet& rArgSet)
-    : SfxTabPage(pParent, "modules/scalc/ui/validationhelptabpage.ui", "ValidationHelpTabPage", &rArgSet)
+    : SfxTabPage(pParent, IS_MOBILE ? OUString("modules/scalc/ui/validationhelptabpage-mobile.ui")
+            : OUString("modules/scalc/ui/validationhelptabpage.ui"), "ValidationHelpTabPage", &rArgSet)
     , m_xTsbHelp(m_xBuilder->weld_check_button("tsbhelp"))
     , m_xEdtTitle(m_xBuilder->weld_entry("title"))
     , m_xEdInputHelp(m_xBuilder->weld_text_view("inputhelp"))
@@ -742,7 +748,8 @@ ScTPValidationError::ScTPValidationError(TabPageParent pParent,
                                          const SfxItemSet& rArgSet)
 
     :   SfxTabPage      ( pParent,
-                          "modules/scalc/ui/erroralerttabpage.ui", "ErrorAlertTabPage",
+                          IS_MOBILE ? OUString("modules/scalc/ui/erroralerttabpage-mobile.ui")
+                                : OUString("modules/scalc/ui/erroralerttabpage.ui"), "ErrorAlertTabPage",
                           &rArgSet )
     , m_xTsbShow(m_xBuilder->weld_check_button("tsbshow"))
     , m_xLbAction(m_xBuilder->weld_combo_box("actionCB"))
