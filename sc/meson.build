@@ -658,7 +658,7 @@ sc_lib = shared_library('sclo',
     icu18_dep,
     broken_mdds_dep,
     orcus_dep,
-  ], 
+  ],
   gnu_symbol_visibility: 'hidden',
   install: true,
 )
