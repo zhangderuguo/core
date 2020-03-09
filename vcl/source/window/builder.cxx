@@ -150,7 +150,10 @@ weld::Builder* Application::CreateBuilder(weld::Widget* pParent, const OUString 
     {
         if (rUIFile == "modules/swriter/ui/wordcount-mobile.ui" ||
             rUIFile == "svx/ui/findreplacedialog-mobile.ui" ||
-            rUIFile == "modules/scalc/ui/validationdialog.ui")
+            rUIFile == "modules/scalc/ui/validationdialog.ui" ||
+            rUIFile == "modules/scalc/ui/validationcriteriapage.ui" ||
+            rUIFile == "modules/scalc/ui/validationhelptabpage-mobile.ui" ||
+            rUIFile == "modules/scalc/ui/erroralerttabpage-mobile.ui")
             bUseJSBuilder = true;
     }
 
