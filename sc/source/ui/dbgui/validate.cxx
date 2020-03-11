@@ -102,6 +102,12 @@ ScValidationDlg::ScValidationDlg(weld::Window* pParent, const SfxItemSet* pArgSe
     AddTabPage(m_sValuePageId, ScTPValidationValue::Create, nullptr);
     AddTabPage("inputhelp", ScTPValidationHelp::Create, nullptr);
     AddTabPage("erroralert", ScTPValidationError::Create, nullptr);
+
+    if (IS_MOBILE)
+    {
+        m_xBuilder->weld_button("cancel")->hide();
+        m_xBuilder->weld_button("help")->hide();
+    }
 }
 
 ScValidationDlg::~ScValidationDlg()

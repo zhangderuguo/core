@@ -39,6 +39,8 @@ SwWatermarkDialog::SwWatermarkDialog(weld::Window* pParent, SfxBindings& rBindin
     {
         m_xBuilder->weld_label("ColorLabel")->hide();
         m_xColor->hide();
+        m_xBuilder->weld_button("cancel")->hide();
+        m_xBuilder->weld_button("help")->hide();
     }
 }
 
