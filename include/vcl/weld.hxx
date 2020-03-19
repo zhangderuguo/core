@@ -617,7 +617,7 @@ public:
         return TRISTATE_FALSE;
     }
 
-    void set_state(TriState eState)
+    virtual void set_state(TriState eState)
     {
         switch (eState)
         {
