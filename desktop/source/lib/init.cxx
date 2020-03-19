@@ -3703,9 +3703,31 @@ static void doc_sendDialogEvent(LibreOfficeKitDocument* /*pThis*/, unsigned nWin
                             bContinueWithLOKWindow = true;
                     }
                 }
+                else if (sControlType == "checkbox")
+                {
+                    auto pCheckButton = dynamic_cast<weld::CheckButton*>(pWidget);
+                    if (pCheckButton)
+                    {
+                        if (sAction == "change")
+                        {
+                            if (aMap["data"] == "true" || aMap["data"] == "false")
+                                pCheckButton->set_state(
+                                    aMap["data"] == "true" ? TRISTATE_TRUE : TRISTATE_FALSE);
+                        }
+                        else
+                            bContinueWithLOKWindow = true;
+                    }
+                }
                 else
                 {
                     bContinueWithLOKWindow = true;
+                }
+
+                if (!bContinueWithLOKWindow)
+                {
+                    JSDialogSender* pSender = dynamic_cast<JSDialogSender*>(pWidget);
+                    if (pSender)
+                        pSender->notifyDialogState();
                 }
             }
 
