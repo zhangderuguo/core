@@ -3704,6 +3704,44 @@ bool SvTreeListBox::set_property(const OString &rKey, const OUString &rValue)
     return true;
 }
 
+boost::property_tree::ptree SvTreeListBox::DumpAsPropertyTree()
+{
+    boost::property_tree::ptree aTree = Control::DumpAsPropertyTree();
+
+    boost::property_tree::ptree aEntries;
+
+    SvTreeListEntry* pEntry = First();
+    for(sal_uLong i = 0; i < GetEntryCount() && pEntry; ++i)
+    {
+        boost::property_tree::ptree aEntry;
+        aEntry.put("", GetEntryText(pEntry));
+
+        aEntries.push_back(std::make_pair("", aEntry));
+
+        pEntry = Next(pEntry);
+    }
+
+    aTree.add_child("entries", aEntries);
+
+    boost::property_tree::ptree aSelected;
+
+    SvTreeListEntry* pSelected = FirstSelected();
+    for (sal_uLong i = 0; i < GetSelectionCount() && pSelected; ++i)
+    {
+        boost::property_tree::ptree aEntry;
+        aEntry.put("", GetEntryText(pSelected));
+
+        aSelected.push_back(std::make_pair("", aEntry));
+
+        pSelected = NextSelected(pSelected);
+    }
+
+    aTree.put("selectedCount", GetSelectionCount());
+    aTree.add_child("selectedEntries", aSelected);
+
+    return aTree;
+}
+
 FactoryFunction SvTreeListBox::GetUITestFactory() const
 {
     return TreeListUIObject::create;

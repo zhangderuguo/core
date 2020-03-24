@@ -765,6 +765,8 @@ public:
     void            SetForceMakeVisible(bool bEnable);
 
     virtual FactoryFunction GetUITestFactory() const override;
+
+    virtual boost::property_tree::ptree DumpAsPropertyTree() override;
 };
 
 class SvInplaceEdit2
