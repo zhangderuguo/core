@@ -98,24 +98,21 @@ public:
     {
     }
 
-    virtual void show() override
+    virtual void set_visible(bool visible) override
     {
-        BaseInstanceClass::show();
-        notifyDialogState();
-    }
-
-    virtual void hide() override
-    {
-        BaseInstanceClass::hide();
-        notifyDialogState();
+        bool change = visible != BaseInstanceClass::get_visible();
+        BaseInstanceClass::set_visible(visible);
+        if (change)
+            notifyDialogState();
     }
 
     virtual void set_sensitive(bool sensitive) override
     {
         bool change = sensitive != BaseInstanceClass::get_sensitive();
         BaseInstanceClass::set_sensitive(sensitive);
-        if (change)
+        if (change) {
             notifyDialogState();
+        }
     }
 };
 

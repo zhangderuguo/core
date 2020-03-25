@@ -327,8 +327,10 @@ JSLabel::JSLabel(VclPtr<vcl::Window> aOwnedToplevel, FixedText* pLabel,
 
 void JSLabel::set_label(const OUString& rText)
 {
+    bool change = get_label() != rText;
     SalInstanceLabel::set_label(rText);
-    notifyDialogState();
+    if (change)
+        notifyDialogState();
 };
 
 JSButton::JSButton(VclPtr<vcl::Window> aOwnedToplevel, ::Button* pButton,
@@ -345,8 +347,10 @@ JSEntry::JSEntry(VclPtr<vcl::Window> aOwnedToplevel, ::Edit* pEntry, SalInstance
 
 void JSEntry::set_text(const OUString& rText)
 {
+    bool change = get_text() != rText;
     SalInstanceEntry::set_text(rText);
-    notifyDialogState();
+    if (change)
+        notifyDialogState();
 }
 
 JSListBox::JSListBox(VclPtr<vcl::Window> aOwnedToplevel, ::ListBox* pListBox,
@@ -479,8 +483,10 @@ JSCheckButton::JSCheckButton(VclPtr<vcl::Window> aOwnedToplevel, ::CheckBox* pCh
 
 void JSCheckButton::set_state(TriState eState)
 {
+    bool change = get_state() != eState;
     SalInstanceCheckButton::set_state(eState);
-    notifyDialogState();
+    if (change)
+        notifyDialogState();
 }
 
 JSTreeView::JSTreeView(VclPtr<vcl::Window> aOwnedToplevel, ::SvTabListBox* pTreeView,
