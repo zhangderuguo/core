@@ -19,6 +19,7 @@
 #include <vcl/combobox.hxx>
 #include <vcl/button.hxx>
 #include <vcl/fmtfield.hxx>
+#include <vcl/svtabbx.hxx>
 
 typedef std::map<OString, weld::Widget*> WidgetMap;
 
@@ -76,6 +77,8 @@ public:
     weld_spin_button(const OString& id, bool bTakeOwnership = false) override;
     virtual std::unique_ptr<weld::CheckButton>
     weld_check_button(const OString& id, bool bTakeOwnership = false) override;
+    virtual std::unique_ptr<weld::TreeView> weld_tree_view(const OString &id,
+                                                           bool bTakeOwnership = false) override;
 
     static weld::MessageDialog* CreateMessageDialog(weld::Widget* pParent,
                                                     VclMessageType eMessageType,
@@ -213,6 +216,18 @@ public:
                   SalInstanceBuilder* pBuilder, bool bTakeOwnership);
 
     virtual void set_state(TriState eState) override;
+};
+
+class VCL_DLLPUBLIC JSTreeView : public JSWidget<SalInstanceTreeView, ::SvTabListBox>
+{
+public:
+    JSTreeView(VclPtr<vcl::Window> aOwnedToplevel, ::SvTabListBox* pTreeView,
+                SalInstanceBuilder* pBuilder, bool bTakeOwnership);
+    virtual void insert(weld::TreeIter* pParent, int pos, const OUString* pStr, const OUString* pId,
+                        const OUString* pIconName, VirtualDevice* pImageSurface, const OUString* pExpanderName,
+                        bool bChildrenOnDemand) override;
+    virtual void remove(int pos) override;
+    virtual void select(int pos) override;
 };
 
 #endif

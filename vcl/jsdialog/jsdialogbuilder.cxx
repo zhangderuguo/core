@@ -263,6 +263,20 @@ std::unique_ptr<weld::CheckButton> JSInstanceBuilder::weld_check_button(const OS
     return pWeldWidget;
 }
 
+std::unique_ptr<weld::TreeView> JSInstanceBuilder::weld_tree_view(const OString &id,
+                                                                  bool bTakeOwnership)
+{
+    SvTabListBox* pTreeView = m_xBuilder->get<SvTabListBox>(id);
+    auto pWeldWidget = pTreeView ?
+            std::make_unique<JSTreeView>(m_bHasTopLevelDialog ? m_aOwnedToplevel : m_aParentDialog,
+                                            pTreeView, this, bTakeOwnership) : nullptr;
+
+    if (pWeldWidget)
+        RememberWidget(id, pWeldWidget.get());
+
+    return pWeldWidget;
+}
+
 weld::MessageDialog* JSInstanceBuilder::CreateMessageDialog(weld::Widget* pParent,
                                                             VclMessageType eMessageType,
                                                             VclButtonsType eButtonType,
@@ -466,6 +480,33 @@ JSCheckButton::JSCheckButton(VclPtr<vcl::Window> aOwnedToplevel, ::CheckBox* pCh
 void JSCheckButton::set_state(TriState eState)
 {
     SalInstanceCheckButton::set_state(eState);
+    notifyDialogState();
+}
+
+JSTreeView::JSTreeView(VclPtr<vcl::Window> aOwnedToplevel, ::SvTabListBox* pTreeView,
+                SalInstanceBuilder* pBuilder, bool bTakeOwnership)
+: JSWidget<SalInstanceTreeView, ::SvTabListBox>(aOwnedToplevel, pTreeView, pBuilder, bTakeOwnership)
+{
+}
+
+void JSTreeView::insert(weld::TreeIter* pParent, int pos, const OUString* pStr, const OUString* pId,
+                        const OUString* pIconName, VirtualDevice* pImageSurface, const OUString* pExpanderName,
+                        bool bChildrenOnDemand)
+{
+    SalInstanceTreeView::insert(pParent, pos, pStr, pId,
+                        pIconName, pImageSurface, pExpanderName, bChildrenOnDemand);
+    notifyDialogState();
+}
+
+void JSTreeView::remove(int pos)
+{
+    SalInstanceTreeView::remove(pos);
+    notifyDialogState();
+}
+
+void JSTreeView::select(int pos)
+{
+    SalInstanceTreeView::select(pos);
     notifyDialogState();
 }
 
