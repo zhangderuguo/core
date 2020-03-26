@@ -3672,6 +3672,22 @@ static void doc_sendDialogEvent(LibreOfficeKitDocument* /*pThis*/, unsigned nWin
                         else
                             bContinueWithLOKWindow = true;
                     }
+                    else if (auto pTreeView = dynamic_cast<weld::TreeView*>(pWidget))
+                    {
+                        if (sAction == "selected")
+                        {
+                            int separatorPos = aMap["data"].indexOf(';');
+                            if (separatorPos)
+                            {
+                                OUString entryPos = aMap["data"].copy(0, separatorPos);
+                                OString posString = OUStringToOString(entryPos, RTL_TEXTENCODING_ASCII_US);
+                                int pos = std::atoi(posString.getStr());
+                                pTreeView->select(pos);
+                            }
+                        }
+                        else
+                            bContinueWithLOKWindow = true;
+                    }
                 }
                 else if (sControlType == "pushbutton")
                 {
