@@ -52,6 +52,8 @@
 #include <unotextrange.hxx>
 #include <strings.hrc>
 #include <cmdid.h>
+#include <comphelper/lok.hxx>
+#include <sfx2/lokhelper.hxx>
 
 using namespace ::com::sun::star;
 using namespace ::com::sun::star::uno;
@@ -376,6 +378,8 @@ The code below would only be part of the solution.
         // now only the rest of the body text can be spelled -
         // if the spelling started inside of the body
         bool bCloseMessage = true;
+        bool bMobile = comphelper::LibreOfficeKit::isActive()
+                        && SfxViewShell::Current() && SfxViewShell::Current()->isLOKMobilePhone();
         if(aRet.empty() && !m_pSpellState->m_bStartedInSelection)
         {
             OSL_ENSURE(m_pSpellState->m_bDrawingsSpelled &&
@@ -385,7 +389,7 @@ The code below would only be part of the solution.
             {
                 LockFocusNotification( true );
                 std::unique_ptr<weld::MessageDialog> xBox(Application::CreateMessageDialog(GetController()->getDialog(),
-                                                                                        VclMessageType::Question, VclButtonsType::YesNo, SwResId(STR_QUERY_SPELL_CONTINUE)));
+                                                                                        VclMessageType::Question, VclButtonsType::YesNo, SwResId(STR_QUERY_SPELL_CONTINUE), bMobile));
                 sal_uInt16 nRet = xBox->run();
                 if (RET_YES == nRet)
                 {
@@ -417,7 +421,7 @@ The code below would only be part of the solution.
                 Application::CreateMessageDialog( xSpellController->getDialog(),
                                                   VclMessageType::Info,
                                                   VclButtonsType::Ok,
-                                                  sInfo ) );
+                                                  sInfo, bMobile ) );
             xBox->run();
             LockFocusNotification( false );
             // take care that the now valid selection is stored
