@@ -60,6 +60,8 @@
 #include <svtools/langtab.hxx>
 #include <cppuhelper/exc_hlp.hxx>
 #include <sal/log.hxx>
+#include <comphelper/lok.hxx>
+#include <sfx2/lokhelper.hxx>
 
 using namespace ::com::sun::star;
 using namespace ::com::sun::star::uno;
@@ -192,9 +194,23 @@ SpellDialog::SpellDialog(SpellDialogChildWindow* pChildWindow,
     , m_xOptionsPB(m_xBuilder->weld_button("options"))
     , m_xUndoPB(m_xBuilder->weld_button("undo"))
     , m_xClosePB(m_xBuilder->weld_button("close"))
+    , m_xHelpPB(m_xBuilder->weld_button("help"))
     , m_xToolbar(m_xBuilder->weld_toolbar("toolbar"))
     , m_xSentenceEDWeld(new weld::CustomWeld(*m_xBuilder, "sentence", *m_xSentenceED))
+    , m_xMobileError(m_xBuilder->weld_label("mobile-spell-error"))
 {
+    m_xSentenceED->SetMobileErrorLabel(m_xMobileError);
+
+    if (comphelper::LibreOfficeKit::isActive()
+        && SfxViewShell::Current() && SfxViewShell::Current()->isLOKMobilePhone())
+    {
+        m_xClosePB->hide();
+        m_xHelpPB->hide();
+        m_xOptionsPB->hide();
+        m_xSentenceEDWeld->hide();
+        m_xMobileError->set_visible(true);
+    }
+
     m_xSentenceED->SetSpellDialog(this);
     m_xSentenceED->Init(m_xToolbar.get());
 
@@ -1667,6 +1683,8 @@ bool SentenceEditWindow_Impl::MarkNextError( bool bIgnoreCurrentError, const css
         if (pEECharAttrib)
         {
             ExtractErrorDescription(*pEECharAttrib, aSpellErrorDescription);
+            if (m_xMobileError)
+                m_xMobileError->set_label(aSpellErrorDescription.sErrorText);
 
             bGrammarError = aSpellErrorDescription.bIsGrammarError;
             m_nErrorStart = pEECharAttrib->nStart;

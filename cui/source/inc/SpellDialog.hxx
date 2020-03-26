@@ -65,6 +65,7 @@ class SentenceEditWindow_Impl : public weld::CustomWidgetController
 private:
     std::unique_ptr<EditEngine> m_xEditEngine;
     std::unique_ptr<EditView> m_xEdView;
+    std::shared_ptr<weld::Label> m_xMobileError;
 
     std::set<sal_Int32> m_aIgnoreErrorsAt;
     SpellDialog*        m_pSpellDialog;
@@ -155,6 +156,8 @@ public:
     void            MoveErrorEnd(long nOffset);
 
     void            ResetIgnoreErrorsAt()   { m_aIgnoreErrorsAt.clear(); }
+
+    void            SetMobileErrorLabel(std::shared_ptr<weld::Label> xMobileError) { m_xMobileError = xMobileError; }
 };
 
 // class SvxSpellDialog ---------------------------------------------
@@ -206,8 +209,10 @@ private:
     std::unique_ptr<weld::Button> m_xOptionsPB;
     std::unique_ptr<weld::Button> m_xUndoPB;
     std::unique_ptr<weld::Button> m_xClosePB;
+    std::unique_ptr<weld::Button> m_xHelpPB;
     std::unique_ptr<weld::Toolbar> m_xToolbar;
     std::unique_ptr<weld::CustomWeld> m_xSentenceEDWeld;
+    std::shared_ptr<weld::Label> m_xMobileError;
 
     DECL_LINK(ChangeHdl, weld::Button&, void);
     DECL_LINK(DoubleClickChangeHdl, weld::TreeView&, void);

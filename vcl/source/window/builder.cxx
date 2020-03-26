@@ -154,6 +154,7 @@ weld::Builder* Application::CreateBuilder(weld::Widget* pParent, const OUString 
             rUIFile == "modules/scalc/ui/validationcriteriapage.ui" ||
             rUIFile == "modules/scalc/ui/validationhelptabpage-mobile.ui" ||
             rUIFile == "modules/scalc/ui/erroralerttabpage-mobile.ui" ||
+            rUIFile == "cui/ui/spellingdialog.ui" ||
             rUIFile == "modules/swriter/ui/watermarkdialog.ui")
             bUseJSBuilder = true;
     }

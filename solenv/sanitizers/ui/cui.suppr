@@ -460,6 +460,7 @@ cui/uiconfig/ui/spellingdialog.ui://GtkLabel[@id='explain'] orphan-label
 cui/uiconfig/ui/spellingdialog.ui://GtkLabel[@id='resumeft'] orphan-label
 cui/uiconfig/ui/spellingdialog.ui://GtkLabel[@id='nosuggestionsft'] orphan-label
 cui/uiconfig/ui/spellingdialog.ui://GtkLabel[@id='alttitleft'] orphan-label
+cui/uiconfig/ui/spellingdialog.ui://GtkLabel[@id='mobile-spell-error'] orphan-label
 cui/uiconfig/ui/storedwebconnectiondialog.ui://GtkLabel[@id='label1'] orphan-label
 cui/uiconfig/ui/storedwebconnectiondialog.ui://GtkLabel[@id='website'] orphan-label
 cui/uiconfig/ui/storedwebconnectiondialog.ui://GtkLabel[@id='username'] orphan-label
