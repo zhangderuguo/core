@@ -36,14 +36,12 @@ typedef std::unordered_map<OUString, void*> t_string2PtrMap;
 constexpr long MSVC_magic_number = 0x19930520L;
 constexpr DWORD MSVC_ExceptionCode = 0xe06d7363;
 
-#ifdef _M_IX86
+#if defined(_M_IX86)
 #define EH_EXCEPTION_PARAMETERS 3 // Number of parameters in exception record for x86
-#else
-#ifdef _M_AMD64
+#elif defined(_M_AMD64) || defined(_M_ARM64)
 #define EH_EXCEPTION_PARAMETERS 4 // Number of parameters in exception record for AMD64
 #else
 #error "Unsupported machine type"
-#endif
 #endif
 
 class ExceptionTypeDescriptor;

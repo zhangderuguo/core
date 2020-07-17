@@ -19,37 +19,16 @@
 
 #pragma once
 
-#include <msvc/except.hxx>
+#include <typelib/typedescription.h>
 
-#pragma pack(push, 8)
-
-struct ExceptionType
+enum ReturnKind
 {
-    sal_Int32 _n0; // flags
-    sal_uInt32 _pTypeInfo; // typeinfo
-    sal_Int32 _n1, _n2, _n3; // thiscast
-    sal_Int32 _n4; // object_size
-    sal_uInt32 _pCopyCtor; // copyctor
-    ExceptionTypeInfo type_info;
-
-    ExceptionType(unsigned char* pCode, sal_uInt64 pCodeBase, typelib_TypeDescription* pTD) throw();
+    RETURN_KIND_REG,
+    RETURN_KIND_HFA_FLOAT,
+    RETURN_KIND_HFA_DOUBLE,
+    RETURN_KIND_INDIRECT
 };
 
-struct RaiseInfo
-{
-    sal_Int32 _n0;
-    sal_uInt32 _pDtor;
-    sal_Int32 _n2;
-    sal_uInt32 _types;
-
-    // Additional fields
-    typelib_TypeDescription* _pTD;
-    unsigned char* _code;
-    sal_uInt64 _codeBase;
-
-    explicit RaiseInfo(typelib_TypeDescription* pTD) throw();
-};
-
-#pragma pack(pop)
+ReturnKind getReturnKind(typelib_TypeDescription const* type);
 
 /* vim:set shiftwidth=4 softtabstop=4 expandtab: */
