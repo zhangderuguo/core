@@ -49,4 +49,5 @@ $(call gb_ExternalProject_get_state_target,libgpg-error,build):
 	$(call gb_Trace_EndRange,libgpg-error,EXTERNAL)
 
 endif
+
 # vim: set noet sw=4 ts=4:

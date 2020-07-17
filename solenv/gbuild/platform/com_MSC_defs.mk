@@ -363,7 +363,11 @@ endef
 
 # common macros to build GPG related libraries
 # we explicitly have to replace cygwin with mingw32 for the host, but the build must stay cygwin, or cmd.exe processes will be spawned
-gb_WIN_GPG_WINDRES_target := $(if $(filter INTEL,$(CPUNAME)),pe-i386,pe-x86-64)
+gb_WIN_GPG_WINDRES_target := $(strip \
+       $(if $(filter INTEL,$(CPUNAME)),pe-i386) \
+       $(if $(filter X86_64,$(CPUNAME)),pe-x86-64) \
+       $(if $(filter ARM64,$(CPUNAME)),pe-aarch64) \
+       )
 gb_WIN_GPG_platform_switches := --build=$(BUILD_PLATFORM) --host=$(subst cygwin,mingw32,$(HOST_PLATFORM))
 gb_WIN_GPG_cross_setup_exports = export REAL_BUILD_CC="$(CC_FOR_BUILD)" \
     && export CC_FOR_BUILD="$(call gb_Executable_get_target_for_build,gcc-wrapper) $(if $(verbose),--wrapper-print-cmdline) --wrapper-env-prefix=REAL_BUILD_ $(SOLARINC) -L$(subst ;, -L,$(ILIB_FOR_BUILD))" \
