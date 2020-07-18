@@ -1,0 +1,54 @@
+--- a/a/nspr/configure
++++ a/a/nspr/configure
+@@ -821,6 +821,7 @@
+         linux*)       OS_ARCH=Linux ;;
+         solaris*)     OS_ARCH=SunOS OS_RELEASE=5 ;;
+         mingw*)       OS_ARCH=WINNT CPU_ARCH=x86 ;;
++        cygwin*)      OS_ARCH=WINNT ;;
+         darwin*)      OS_ARCH=Darwin ;;
+         riscos*)      OS_ARCH=RISCOS ;;
+     esac
+--- a/a/nss/lib/freebl/Makefile.orig	2020-07-09 07:30:04.024326100 +0200
++++ a/a/nss/lib/freebl/Makefile	2020-07-09 07:42:05.431065500 +0200
+@@ -119,10 +119,12 @@
+         DEFINES += -DNSS_X86
+ endif
+ endif
++ifdef NS_USE_GCC
+ ifeq ($(CPU_ARCH),aarch64)
+     DEFINES += -DUSE_HW_AES
+     EXTRA_SRCS += aes-armv8.c gcm-aarch64.c
+ endif
++endif
+ ifeq ($(CPU_ARCH),arm)
+ ifndef NSS_DISABLE_ARM32_NEON
+     EXTRA_SRCS += gcm-arm32-neon.c
+@@ -198,6 +200,7 @@
+     ifdef BUILD_OPT
+ 	OPTIMIZER += -Ox  # maximum optimization for freebl
+     endif
++ifeq ($(CPU_ARCH),x86_64)
+     ASFILES  = arcfour-amd64-masm.asm mpi_amd64_masm.asm mp_comba_amd64_masm.asm
+     DEFINES += -DNSS_BEVAND_ARCFOUR -DMPI_AMD64 -DMP_ASSEMBLY_MULTIPLY
+     DEFINES += -DNSS_USE_COMBA
+@@ -215,6 +218,7 @@
+ endif
+ endif
+ endif
++endif
+ 
+ ifeq ($(OS_TARGET),IRIX)
+ ifeq ($(USE_N32),1)
+@@ -717,10 +721,12 @@
+ $(OBJDIR)/$(PROG_PREFIX)gcm-arm32-neon$(OBJ_SUFFIX): CFLAGS += -mfpu=neon$(if $(USES_SOFTFLOAT_ABI), -mfloat-abi=softfp)
+ endif
+ endif
++ifdef NS_USE_GCC
+ ifeq ($(CPU_ARCH),aarch64)
+ $(OBJDIR)/$(PROG_PREFIX)aes-armv8$(OBJ_SUFFIX): CFLAGS += -march=armv8-a+crypto
+ $(OBJDIR)/$(PROG_PREFIX)gcm-aarch64$(OBJ_SUFFIX): CFLAGS += -march=armv8-a+crypto
+ endif
++endif
+ 
+ ifeq ($(CPU_ARCH),ppc)
+ ifndef NSS_DISABLE_ALTIVEC
