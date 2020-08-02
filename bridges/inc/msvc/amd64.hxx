@@ -16,36 +16,41 @@
  *   except in compliance with the License. You may obtain a copy of
  *   the License at http://www.apache.org/licenses/LICENSE-2.0 .
  */
-#ifndef INCLUDED_BRIDGES_SOURCE_CPP_UNO_MSVC_WIN32_X86_64_MSCX_HXX
-#define INCLUDED_BRIDGES_SOURCE_CPP_UNO_MSVC_WIN32_X86_64_MSCX_HXX
 
-#define WIN32_LEAN_AND_MEAN
-#include <windows.h>
+#pragma once
 
-#include <rtl/ustring.hxx>
+#include <typeinfo>
+#include <msvc/except.hxx>
 
+#pragma pack(push, 8)
 
-class type_info;
-typedef struct _uno_Any uno_Any;
-typedef struct _uno_Mapping uno_Mapping;
-
-namespace CPPU_CURRENT_NAMESPACE
+struct ExceptionType
 {
+    sal_Int32 _n0; // flags
+    sal_uInt32 _pTypeInfo; // typeinfo
+    sal_Int32 _n1, _n2, _n3; // thiscast
+    sal_Int32 _n4; // object_size
+    sal_uInt32 _pCopyCtor; // copyctor
+    ExceptionTypeInfo type_info;
 
-const DWORD MSVC_ExceptionCode = 0xe06d7363;
-const long MSVC_magic_number = 0x19930520L;
+    ExceptionType(unsigned char* pCode, sal_uInt64 pCodeBase, typelib_TypeDescription* pTD) throw();
+};
 
-typedef enum { REGPARAM_INT, REGPARAM_FLT } RegParamKind;
+struct RaiseInfo
+{
+    sal_Int32 _n0;
+    sal_uInt32 _pDtor;
+    sal_Int32 _n2;
+    sal_uInt32 _types;
 
-type_info * mscx_getRTTI( OUString const & rUNOname );
+    // Additional fields
+    typelib_TypeDescription* _pTD;
+    unsigned char* _code;
+    sal_uInt64 _codeBase;
 
-int mscx_filterCppException(
-    EXCEPTION_POINTERS * pPointers, uno_Any * pUnoExc, uno_Mapping * pCpp2Uno );
+    explicit RaiseInfo(typelib_TypeDescription* pTD) throw();
+};
 
-void mscx_raiseException(
-    uno_Any * pUnoExc, uno_Mapping * pUno2Cpp );
+#pragma pack(pop)
 
-}
-
-#endif
 /* vim:set shiftwidth=4 softtabstop=4 expandtab: */
